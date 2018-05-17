@@ -1,0 +1,50 @@
+@import (reference) '~ui/styles/variables/colors';
+@import (reference) "~ui/styles/variables";
+
+ml-new-job {
+
+  .new-job-gallery {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+
+    .new-job-gallery-button {
+      padding: 20px;
+      margin: 10px 20px 20px 0px;
+      border-radius: 4px;
+      display: inline-block;
+      font-size: 20px;
+      font-weight: normal;
+      background-color: @globalColorLightestGray;
+      border: solid 1px @globalColorLightGray;
+      cursor: pointer;
+      text-align: center;
+
+      .title {
+        color: @globalColorBlue;
+      }
+      .sub-title {
+        color: #999999;
+        font-size: 12px;
+        margin-top:2px;
+        font-style: italic;
+      }
+      .job-type-icon {
+        box-sizing: content-box;
+        padding: 20px;
+        display: inline-block;
+        color: black;
+        width: 50px;
+        font-size: 50px;
+        line-height: 30px;
+      }
+    }
+
+    .new-job-gallery-button:hover {
+      background-color: @globalColorWhite;
+      border-color: @globalColorBlue;
+    }
+
+  }
+}

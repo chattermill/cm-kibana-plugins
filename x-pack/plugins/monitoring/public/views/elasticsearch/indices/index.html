@@ -1,0 +1,12 @@
+<div ng-controller="indices">
+  <monitoring-main product="elasticsearch" name="indices">
+    <monitoring-cluster-status-elasticsearch></monitoring-cluster-status-elasticsearch>
+    <div class="page-row">
+      <monitoring-index-listing
+        data="pageData.rows"
+        show-system-indices="showSystemIndices"
+        toggle-show-system-indices="toggleShowSystemIndices"
+      ></monitoring-index-listing>
+    </div>
+  </monitoring-main>
+</div>

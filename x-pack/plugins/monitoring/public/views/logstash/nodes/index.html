@@ -1,0 +1,8 @@
+<div ng-controller="logstashNodes">
+  <monitoring-main product="logstash" name="nodes">
+    <monitoring-cluster-status-logstash></monitoring-cluster-status-logstash>
+    <div class="page-row">
+      <monitoring-logstash-node-listing rows="pageData.nodes"></monitoring-logstash-node-listing>
+    </div>
+  </monitoring-main>
+</div>
