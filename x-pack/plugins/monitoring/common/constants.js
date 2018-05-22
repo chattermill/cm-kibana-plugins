@@ -2,6 +2,10 @@
  * Helper string to add as a tag in every logging call
  */
 export const LOGGING_TAG = 'monitoring-ui';
+/**
+ * Helper string to add as a tag in every logging call related to Kibana monitoring
+ */
+export const KIBANA_MONITORING_LOGGING_TAG = 'kibana-monitoring';
 
 /**
  * The Monitoring API version is the expected API format that we export and expect to import.
@@ -9,17 +13,22 @@ export const LOGGING_TAG = 'monitoring-ui';
  */
 export const MONITORING_SYSTEM_API_VERSION = '6';
 /**
- * The name of the Kibana System ID used to publish and lookup Kibana stats through the Monitoring system.
+ * The name of the Kibana System ID used to publish and look up Kibana stats through the Monitoring system.
  * @type {string}
  */
 export const KIBANA_SYSTEM_ID = 'kibana';
 /**
- * The name of the Kibana System ID used to lookup Kibana stats through the Monitoring system.
+ * The name of the Kibana System ID used to look up Logstash stats through the Monitoring system.
  * @type {string}
  */
 export const LOGSTASH_SYSTEM_ID = 'logstash';
 /**
- * The type name used within the Monitoring index to publish Kibana stats.
+ * The name of the Kibana System ID used to look up Reporting stats through the Monitoring system.
+ * @type {string}
+ */
+export const REPORTING_SYSTEM_ID = 'reporting';
+/**
+ * The type name used within the Monitoring index to publish Kibana ops stats.
  * @type {string}
  */
 export const KIBANA_STATS_TYPE = 'kibana_stats';
@@ -28,6 +37,21 @@ export const KIBANA_STATS_TYPE = 'kibana_stats';
  * @type {string}
  */
 export const KIBANA_SETTINGS_TYPE = 'kibana_settings';
+/**
+ * The type name used within the Monitoring index to publish Kibana usage stats.
+ * @type {string}
+ */
+export const KIBANA_USAGE_TYPE = 'kibana';
+/**
+ * The type name used within the Monitoring index to publish reporting stats.
+ * @type {string}
+ */
+export const KIBANA_REPORTING_TYPE = 'reporting_stats';
+
+/*
+ * Key for the localStorage service
+ */
+export const STORAGE_KEY = 'xpack.monitoring.data';
 
 /*
  * Values for column sorting in table options
@@ -37,7 +61,7 @@ export const SORT_ASCENDING = 1;
 export const SORT_DESCENDING = -1;
 
 /*
- * config options for welcome banner / allow phone home
+ * config options for welcome banner / allow telemetry
  * @type {string}
  */
 export const CONFIG_SHOW_BANNER = 'xPackMonitoring:showBanner';
@@ -147,6 +171,10 @@ export const LOGSTASH = {
          */
         VERTICAL_DISTANCE_PX: 20
       }
+    },
+    ICON: {
+      HEIGHT_PX: 18,
+      WIDTH_PX: 18
     }
   },
 
@@ -154,3 +182,12 @@ export const LOGSTASH = {
 };
 
 export const DEFAULT_NO_DATA_MESSAGE = 'There are no records that match your query. Try changing the time range selection.';
+export const DEFAULT_NO_DATA_MESSAGE_WITH_FILTER = (
+  'There are no records that match your query with the filter [{{FILTER}}]. Try changing the filter or the time range selection.'
+);
+
+export const TABLE_ACTION_UPDATE_FILTER = 'UPDATE_FILTER';
+export const TABLE_ACTION_RESET_PAGING  = 'RESET_PAGING';
+
+export const DEBOUNCE_SLOW_MS = 17; // roughly how long it takes to render a frame at 60fps
+export const DEBOUNCE_FAST_MS = 10; // roughly how long it takes to render a frame at 100fps

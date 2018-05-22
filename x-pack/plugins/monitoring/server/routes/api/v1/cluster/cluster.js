@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import { getClustersFromRequest } from '../../../../lib/cluster/get_clusters_from_request';
-import { handleError } from '../../../../lib/handle_error';
+import { handleError } from '../../../../lib/errors';
+import { prefixIndexPattern } from '../../../../lib/ccs_utils';
 
 export function clusterRoutes(server) {
   /*
@@ -15,6 +16,7 @@ export function clusterRoutes(server) {
           clusterUuid: Joi.string().required()
         }),
         payload: Joi.object({
+          ccs: Joi.string().optional(),
           timeRange: Joi.object({
             min: Joi.date().required(),
             max: Joi.date().required()
@@ -23,9 +25,23 @@ export function clusterRoutes(server) {
       }
     },
     handler: (req, reply) => {
-      return getClustersFromRequest(req)
-      .then(reply)
-      .catch(err => reply(handleError(err, req)));
+      const config = server.config();
+      const ccs = req.payload.ccs;
+      const esIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.elasticsearch.index_pattern', ccs);
+      const kbnIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.kibana.index_pattern', ccs);
+      const lsIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.logstash.index_pattern', ccs);
+      const beatsIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.beats.index_pattern', ccs);
+      const alertsIndex = prefixIndexPattern(config, 'xpack.monitoring.cluster_alerts.index', ccs);
+      const indexPatterns = { esIndexPattern, kbnIndexPattern, lsIndexPattern, beatsIndexPattern, alertsIndex };
+      const options = {
+        clusterUuid: req.params.clusterUuid,
+        start: req.payload.timeRange.min,
+        end: req.payload.timeRange.max,
+      };
+
+      return getClustersFromRequest(req, indexPatterns, options)
+        .then(reply)
+        .catch(err => reply(handleError(err, req)));
     }
   });
-};
+}

@@ -22,20 +22,20 @@ export function registerSaveRoute(server) {
     handler: (request, reply) => {
       const callWithRequest = callWithRequestFactory(server, request);
 
-      const watch = Watch.fromDownstreamJSON(request.payload);
+      const watch = Watch.fromDownstreamJson(request.payload);
 
-      return saveWatch(callWithRequest, watch.upstreamJSON)
-      .then(reply)
-      .catch(err => {
+      return saveWatch(callWithRequest, watch.upstreamJson)
+        .then(reply)
+        .catch(err => {
 
         // Case: Error from Elasticsearch JS client
-        if (isEsError(err)) {
-          return reply(wrapEsError(err));
-        }
+          if (isEsError(err)) {
+            return reply(wrapEsError(err));
+          }
 
-        // Case: default
-        reply(wrapUnknownError(err));
-      });
+          // Case: default
+          reply(wrapUnknownError(err));
+        });
     },
     config: {
       pre: [ licensePreRouting ]

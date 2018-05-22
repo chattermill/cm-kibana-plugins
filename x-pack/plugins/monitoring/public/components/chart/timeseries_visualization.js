@@ -4,22 +4,23 @@ import { getLastValue } from './get_last_value';
 import { TimeseriesContainer } from './timeseries_container';
 import { HorizontalLegend } from './horizontal_legend';
 import { getValuesForSeriesIndex, getValuesByX } from './get_values_for_legend';
+import { DEBOUNCE_SLOW_MS } from 'monitoring-constants';
 
 export class TimeseriesVisualization extends React.Component {
 
-  constructor() {
-    super();
+  constructor(props) {
+    super(props);
 
-    // 17ms, which is roughly 60fps
-    const debounceMillis = 17;
-    this.debouncedUpdateLegend = _.debounce(this.updateLegend, debounceMillis);
+    this.debouncedUpdateLegend = _.debounce(this.updateLegend, DEBOUNCE_SLOW_MS);
     this.debouncedUpdateLegend = this.debouncedUpdateLegend.bind(this);
 
     this.toggleFilter = this.toggleFilter.bind(this);
 
+    const values = this.getLastValues(props);
+
     this.state = {
       values: {},
-      seriesToShow: [],
+      seriesToShow: _.keys(values),
       ignoreVisabilityUpdates: false
     };
   }
@@ -114,22 +115,28 @@ export class TimeseriesVisualization extends React.Component {
       flexDirection: 'column' // for legend position = bottom
     };
 
+    const legend = this.props.hasLegend
+      ? (
+        <HorizontalLegend
+          seriesFilter={this.state.seriesToShow}
+          seriesValues={this.state.values}
+          onToggle={this.toggleFilter}
+          {...this.props}
+        />
+      )
+      : null;
+
     return (
-      <div className={ className }>
-        <div style={ style } className='rhythm_chart__content'>
-          <div className='rhythm_chart__visualization'>
+      <div className={className}>
+        <div style={style} className="rhythm_chart__content">
+          <div className="rhythm_chart__visualization">
             <TimeseriesContainer
-              seriesToShow={ this.state.seriesToShow }
-              updateLegend={ this.debouncedUpdateLegend }
-              { ...this.props }
+              seriesToShow={this.state.seriesToShow}
+              updateLegend={this.debouncedUpdateLegend}
+              {...this.props}
             />
           </div>
-          <HorizontalLegend
-            seriesFilter={ this.state.seriesToShow }
-            seriesValues={ this.state.values }
-            onToggle={ this.toggleFilter }
-            { ...this.props }
-          />
+          { legend }
         </div>
       </div>
     );
@@ -137,5 +144,5 @@ export class TimeseriesVisualization extends React.Component {
 }
 
 TimeseriesVisualization.defaultProps = {
-  legend: true
+  hasLegend: true
 };

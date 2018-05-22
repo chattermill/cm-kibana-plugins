@@ -1,4 +1,5 @@
 import { merge } from 'lodash';
+import { badRequest } from 'boom';
 import { BaseWatch } from './base_watch';
 import { WATCH_TYPES } from '../../../common/constants';
 
@@ -12,43 +13,43 @@ export class MonitoringWatch extends BaseWatch {
     this.isSystemWatch = true;
   }
 
-  get watchJSON() {
+  get watchJson() {
     const result = merge(
       {},
-      super.watchJSON
+      super.watchJson
     );
 
     return result;
   }
 
   getVisualizeQuery() {
-    throw new Error('getVisualizeQuery called for monitoring watch');
+    throw badRequest('getVisualizeQuery called for monitoring watch');
   }
 
   formatVisualizeData() {
-    throw new Error('formatVisualizeData called for monitoring watch');
+    throw badRequest('formatVisualizeData called for monitoring watch');
   }
 
   // To Elasticsearch
-  get upstreamJSON() {
-    throw new Error('upstreamJSON called for monitoring watch');
+  get upstreamJson() {
+    throw badRequest('upstreamJson called for monitoring watch');
   }
 
   // To Kibana
-  get downstreamJSON() {
+  get downstreamJson() {
     const result = merge(
       {},
-      super.downstreamJSON
+      super.downstreamJson
     );
 
     return result;
   }
 
   // From Elasticsearch
-  static fromUpstreamJSON(json) {
+  static fromUpstreamJson(json) {
     const props = merge(
       {},
-      super.getPropsFromUpstreamJSON(json),
+      super.getPropsFromUpstreamJson(json),
       {
         type: WATCH_TYPES.MONITORING
       }
@@ -58,8 +59,8 @@ export class MonitoringWatch extends BaseWatch {
   }
 
   // From Kibana
-  static fromDownstreamJSON() {
-    throw new Error('fromDownstreamJSON called for monitoring watch');
+  static fromDownstreamJson() {
+    throw badRequest('fromDownstreamJson called for monitoring watch');
   }
 
-};
+}

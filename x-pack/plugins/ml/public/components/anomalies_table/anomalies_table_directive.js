@@ -13,7 +13,7 @@
  * strictly prohibited.
  */
 
- /*
+/*
  * AngularJS directive for rendering a table of Machine Learning anomalies.
  */
 
@@ -22,8 +22,9 @@ import _ from 'lodash';
 import rison from 'rison-node';
 
 import { notify } from 'ui/notify';
-import { replaceStringTokens } from 'plugins/ml/util/string_utils';
-import { isTimeSeriesViewDetector } from 'plugins/ml/util/job_utils';
+import { ES_FIELD_TYPES } from 'plugins/ml/../common/constants/field_types';
+import { replaceStringTokens, mlEscape } from 'plugins/ml/util/string_utils';
+import { isTimeSeriesViewDetector } from 'plugins/ml/../common/util/job_utils';
 import {
   getEntityFieldName,
   getEntityFieldValue,
@@ -31,7 +32,9 @@ import {
   showTypicalForFunction,
   getSeverity
 } from 'plugins/ml/util/anomaly_utils';
+import template from './anomalies_table.html';
 
+import 'plugins/ml/components/controls';
 import 'plugins/ml/components/paginated_table';
 import 'plugins/ml/filters/format_value';
 import 'plugins/ml/filters/metric_change_description';
@@ -45,8 +48,18 @@ import openRowArrow from 'plugins/ml/components/paginated_table/open.html';
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
 
-module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
-  mlJobService, mlESMappingService, mlResultsService, mlAnomaliesTableService, formatValueFilter, AppState) {
+module.directive('mlAnomaliesTable', function (
+  $window,
+  $route,
+  timefilter,
+  mlJobService,
+  mlESMappingService,
+  mlResultsService,
+  mlAnomaliesTableService,
+  mlSelectIntervalService,
+  mlSelectSeverityService,
+  formatValueFilter) {
+
   return {
     restrict: 'E',
     scope: {
@@ -55,51 +68,20 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
       showViewSeriesLink: '=',
       filteringEnabled: '='
     },
-    template: require('plugins/ml/components/anomalies_table/anomalies_table.html'),
+    template,
     link: function (scope, element) {
-      const appState = new AppState();
-      appState.fetch();
+      // Previously, we instantiated a new AppState here for the
+      // severity threshold and interval setting, thus resetting it on every
+      // reload. Now that this is handled differently via services and them
+      // being singletons, we need to explicitly reset the setting's state,
+      // otherwise the state would be retained across multiple instances of
+      // these settings. Should we want to change this behavior, e.g. to
+      // store the setting of the severity threshold across pages, we can
+      // just remove these resets.
+      mlSelectIntervalService.state.reset().changed();
+      mlSelectSeverityService.state.reset().changed();
 
-      scope.thresholdOptions = [
-        { display:'critical', val:75 },
-        { display:'major', val:50 },
-        { display:'minor', val:25 },
-        { display:'warning', val:0 }];
-
-      scope.intervalOptions = [
-        { display:'Auto', val:'auto' },
-        { display:'1 hour', val:'hour' },
-        { display:'1 day', val:'day' },
-        { display:'Show all', val:'second' }];
-
-      // Store the threshold and aggregation interval in the AppState so that they
-      // are restored on page refresh.
-      if (appState.mlAnomaliesTable === undefined) {
-        appState.mlAnomaliesTable = {};
-      }
-
-      let thresholdValue = _.get(appState, 'mlAnomaliesTable.thresholdValue', 0);
-      let thresholdOption = _.findWhere(scope.thresholdOptions, { val:thresholdValue });
-      if (thresholdOption === undefined) {
-        // Attempt to set value in URL which doesn't map to one of the options.
-        thresholdOption = _.findWhere(scope.thresholdOptions, { val:0 });
-        thresholdValue = 0;
-      }
-      scope.threshold = thresholdOption;
-
-      let intervalValue = _.get(appState, 'mlAnomaliesTable.intervalValue', 'auto');
-      let intervalOption = _.findWhere(scope.intervalOptions, { val:intervalValue });
-      if (intervalOption === undefined) {
-        // Attempt to set value in URL which doesn't map to one of the options.
-        intervalOption = _.findWhere(scope.intervalOptions, { val:'auto' });
-        intervalValue = 'auto';
-      }
-      scope.interval = intervalOption;
       scope.momentInterval = 'second';
-
-      appState.mlAnomaliesTable.thresholdValue = thresholdValue;
-      appState.mlAnomaliesTable.intervalValue = intervalValue;
-      appState.save();
 
       scope.table = {};
       scope.table.perPage = 25;
@@ -110,30 +92,20 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
       scope.categoryExamplesByJob = {};
       const MAX_NUMBER_CATEGORY_EXAMPLES = 10;  // Max number of examples to show in table cell or expanded row (engine default is to store 4).
 
-      scope.$on('renderTable',() => {
-        updateTableData();
-      });
+      mlSelectIntervalService.state.watch(updateTableData);
+      mlSelectSeverityService.state.watch(updateTableData);
+
+      scope.$on('renderTable', updateTableData);
 
       element.on('$destroy', () => {
+        mlSelectIntervalService.state.unwatch(updateTableData);
+        mlSelectSeverityService.state.unwatch(updateTableData);
         scope.$destroy();
       });
 
       scope.isShowingAggregatedData = function () {
-        return (scope.interval.display !== 'Show all');
-      };
-
-      scope.setThreshold = function (threshold) {
-        scope.threshold = threshold;
-        appState.mlAnomaliesTable.thresholdValue = threshold.val;
-        appState.save();
-        updateTableData();
-      };
-
-      scope.setInterval = function (interval) {
-        scope.interval = interval;
-        appState.mlAnomaliesTable.intervalValue = interval.val;
-        appState.save();
-        updateTableData();
+        const interval = mlSelectIntervalService.state.get('interval');
+        return (interval.display !== 'Show all');
       };
 
       scope.getExamplesForCategory = function (jobId, categoryId) {
@@ -203,10 +175,11 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
           }
         });
 
+        // Need to encode the _a parameter in case any entities contain unsafe characters such as '+'.
         let path = chrome.getBasePath();
         path += '/app/ml#/timeseriesexplorer';
         path += '?_g=' + _g;
-        path += '&_a=' + _a;
+        path += '&_a=' + encodeURIComponent(_a);
         $window.open(path, '_blank');
       };
 
@@ -250,63 +223,63 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
           // matching events in the Kibana Discover tab depending on whether the
           // categorization field is of mapping type text (preferred) or keyword.
           mlResultsService.getCategoryDefinition(record.job_id, categoryId)
-          .then((resp) => {
-            let query = null;
-            // Build query using categorization regex (if keyword type) or terms (if text type).
-            // Check for terms or regex in case categoryId represents an anomaly from the absence of the
-            // categorization field in documents (usually indicated by a categoryId of -1).
-            if (categorizationFieldType === 'keyword') {
-              if (resp.regex) {
-                query = `${categorizationFieldName}:/${resp.regex}/`;
-              }
-            } else {
-              if (resp.terms) {
-                query = `${categorizationFieldName}:` + resp.terms.split(' ').join(` AND ${categorizationFieldName}:`);
-              }
-            }
-
-            const recordTime = moment(record[scope.timeFieldName]);
-            const from = recordTime.toISOString();
-            const to = recordTime.add(record.bucket_span, 's').toISOString();
-
-            // Use rison to build the URL .
-            const _g = rison.encode({
-              refreshInterval: {
-                display: 'Off',
-                pause: false,
-                value: 0
-              },
-              time: {
-                from: from,
-                to: to,
-                mode: 'absolute'
-              }
-            });
-
-            const appStateProps = {
-              index: indexPatternId,
-              filters: []
-            };
-            if (query !== null) {
-              appStateProps.query = {
-                query_string: {
-                  analyze_wildcard: true,
-                  query: query
+            .then((resp) => {
+              let query = null;
+              // Build query using categorization regex (if keyword type) or terms (if text type).
+              // Check for terms or regex in case categoryId represents an anomaly from the absence of the
+              // categorization field in documents (usually indicated by a categoryId of -1).
+              if (categorizationFieldType === ES_FIELD_TYPES.KEYWORD) {
+                if (resp.regex) {
+                  query = `${categorizationFieldName}:/${resp.regex}/`;
                 }
+              } else {
+                if (resp.terms) {
+                  query = `${categorizationFieldName}:` + resp.terms.split(' ').join(` AND ${categorizationFieldName}:`);
+                }
+              }
+
+              const recordTime = moment(record[scope.timeFieldName]);
+              const from = recordTime.toISOString();
+              const to = recordTime.add(record.bucket_span, 's').toISOString();
+
+              // Use rison to build the URL .
+              const _g = rison.encode({
+                refreshInterval: {
+                  display: 'Off',
+                  pause: false,
+                  value: 0
+                },
+                time: {
+                  from: from,
+                  to: to,
+                  mode: 'absolute'
+                }
+              });
+
+              const appStateProps = {
+                index: indexPatternId,
+                filters: []
               };
-            }
-            const _a = rison.encode(appStateProps);
+              if (query !== null) {
+                appStateProps.query = {
+                  query_string: {
+                    analyze_wildcard: true,
+                    query: query
+                  }
+                };
+              }
+              const _a = rison.encode(appStateProps);
 
-            // Need to encode the _a parameter as it will contain characters such as '+' if using the regex.
-            let path = chrome.getBasePath();
-            path += '/app/kibana#/discover';
-            path += '?_g=' + _g;
-            path += '&_a=' + encodeURIComponent(_a);
-            $window.open(path, '_blank');
+              // Need to encode the _a parameter as it will contain characters such as '+' if using the regex.
+              let path = chrome.getBasePath();
+              path += '/app/kibana#/discover';
+              path += '?_g=' + _g;
+              path += '&_a=' + encodeURIComponent(_a);
+              $window.open(path, '_blank');
 
-          }).catch((resp) => {
-            console.log('viewExamples(): error loading categoryDefinition:', resp);
-          });
+            }).catch((resp) => {
+              console.log('viewExamples(): error loading categoryDefinition:', resp);
+            });
         } else {
           console.log(`viewExamples(): error finding type of field ${categorizationFieldName} in indices:`,
             datafeedIndices);
@@ -357,25 +330,27 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
           const categoryId = record.mlcategory[0];
 
           mlResultsService.getCategoryDefinition(jobId, categoryId)
-          .then((resp) => {
+            .then((resp) => {
             // Prefix each of the terms with '+' so that the Elasticsearch Query String query
             // run in a drilldown Kibana dashboard has to match on all terms.
-            const termsArray = _.map(resp.terms.split(' '), (term) => { return '+' + term; });
-            record.mlcategoryterms = termsArray.join(' ');
-            record.mlcategoryregex = resp.regex;
+              const termsArray = _.map(resp.terms.split(' '), (term) => { return '+' + term; });
+              record.mlcategoryterms = termsArray.join(' ');
+              record.mlcategoryregex = resp.regex;
 
-            // Replace any tokens in the configured url_value with values from the source record,
-            // and then open link in a new tab/window.
-            const urlPath = replaceStringTokens(customUrl.url_value, record, true);
-            $window.open(urlPath, '_blank');
+              // Replace any tokens in the configured url_value with values from the source record,
+              // and then open link in a new tab/window.
+              const urlPath = replaceStringTokens(customUrl.url_value, record, true);
+              $window.open(urlPath, '_blank');
 
-          }).catch((resp) => {
-            console.log('openCustomUrl(): error loading categoryDefinition:', resp);
-          });
+            }).catch((resp) => {
+              console.log('openCustomUrl(): error loading categoryDefinition:', resp);
+            });
 
         } else {
           // Replace any tokens in the configured url_value with values from the source record,
           // and then open link in a new tab/window.
+          // TODO - if drilling down to a Kibana dashboard, use escapeForElasticsearchQuery from string_utils
+          // to escape any terms used in the dashboard query or filters.
           const urlPath = replaceStringTokens(customUrl.url_value, record, true);
           $window.open(urlPath, '_blank');
         }
@@ -383,7 +358,7 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
       };
 
       scope.filter = function (field, value, operator) {
-        mlAnomaliesTableService.fireFilterChange(field, value, operator);
+        mlAnomaliesTableService.filterChange.changed(field, value, operator);
       };
 
       function updateTableData() {
@@ -393,9 +368,11 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
           summaryRecords = aggregateAnomalies();
         } else {
           // Show all anomaly records.
-          scope.momentInterval = scope.interval.val;
+          const interval = mlSelectIntervalService.state.get('interval');
+          scope.momentInterval = interval.val;
+          const threshold = mlSelectSeverityService.state.get('threshold');
           const filteredRecords = _.filter(scope.anomalyRecords, (record) => {
-            return Number(record.record_score) >= scope.threshold.val;
+            return Number(record.record_score) >= threshold.val;
           });
 
           _.each(filteredRecords, (record) => {
@@ -520,26 +497,28 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
         }
 
         // Determine the aggregation interval - records in scope are in descending time order.
-        if (scope.interval.val === 'auto') {
+        const interval = mlSelectIntervalService.state.get('interval');
+        if (interval.val === 'auto') {
           const earliest = moment(_.last(scope.anomalyRecords)[scope.timeFieldName]);
           const latest = moment(_.first(scope.anomalyRecords)[scope.timeFieldName]);
           const daysDiff = latest.diff(earliest, 'days');
           scope.momentInterval = (daysDiff < 2 ? 'hour' : 'day');
         } else {
-          scope.momentInterval = scope.interval.val;
+          scope.momentInterval = interval.val;
         }
 
         // Only show records passing the severity threshold.
+        const threshold = mlSelectSeverityService.state.get('threshold');
         const filteredRecords = _.filter(scope.anomalyRecords, (record) => {
 
-          return Number(record.record_score) >= scope.threshold.val;
+          return Number(record.record_score) >= threshold.val;
         });
 
         const aggregatedData = {};
         _.each(filteredRecords, (record) => {
 
           // Use moment.js to get start of interval. This will use browser timezone.
-          // TODO - support choice of browser or UTC timezone once funcitonality is in Kibana.
+          // TODO - support choice of browser or UTC timezone once functionality is in Kibana.
           const roundedTime = moment(record[scope.timeFieldName]).startOf(scope.momentInterval).valueOf();
           if (!_.has(aggregatedData, roundedTime)) {
             aggregatedData[roundedTime] = {};
@@ -739,12 +718,12 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
           if (_.has(record, 'entityValue') && record.entityName === 'mlcategory') {
             // Obtain the category definition and display the examples in the expanded row.
             mlResultsService.getCategoryDefinition(record.jobId, record.entityValue)
-            .then((resp) => {
-              rowScope.categoryDefinition = {
-                'examples':_.slice(resp.examples, 0, Math.min(resp.examples.length, MAX_NUMBER_CATEGORY_EXAMPLES)) };
-            }).catch((resp) => {
-              console.log('Anomalies table createTableRow(): error loading categoryDefinition:', resp);
-            });
+              .then((resp) => {
+                rowScope.categoryDefinition = {
+                  'examples': _.slice(resp.examples, 0, Math.min(resp.examples.length, MAX_NUMBER_CATEGORY_EXAMPLES)) };
+              }).catch((resp) => {
+                console.log('Anomalies table createTableRow(): error loading categoryDefinition:', resp);
+              });
           }
 
           rowScope.$broadcast('initRow', record);
@@ -753,13 +732,13 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
         rowScope.mouseenterRow = function () {
           // Publish that a record is being hovered over, so that the corresponding marker
           // in the model plot chart can be highlighted.
-          mlAnomaliesTableService.fireAnomalyRecordMouseenter(record);
+          mlAnomaliesTableService.anomalyRecordMouseenter.changed(record);
         };
 
         rowScope.mouseleaveRow = function () {
           // Publish that a record is no longer being hovered over, so that the corresponding marker in the
           // model plot chart can be unhighlighted.
-          mlAnomaliesTableService.fireAnomalyRecordMouseleave(record);
+          mlAnomaliesTableService.anomalyRecordMouseleave.changed(record);
         };
 
         // Create a table row with the following columns:
@@ -775,19 +754,19 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
         //   job_id
         //   links (if customUrls configured or drilldown to Single Metric)
         //   category examples (if by mlcategory)
-        const addEntity = _.findWhere(scope.table.columns, { 'title':'found for' });
-        const addInfluencers = _.findWhere(scope.table.columns, { 'title':'influenced by' });
+        const addEntity = _.findWhere(scope.table.columns, { 'title': 'found for' });
+        const addInfluencers = _.findWhere(scope.table.columns, { 'title': 'influenced by' });
 
-        const addActual = _.findWhere(scope.table.columns, { 'title':'actual' });
-        const addTypical = _.findWhere(scope.table.columns, { 'title':'typical' });
-        const addDescription = _.findWhere(scope.table.columns, { 'title':'description' });
-        const addExamples = _.findWhere(scope.table.columns, { 'title':'category examples' });
-        const addLinks = _.findWhere(scope.table.columns, { 'title':'links' });
+        const addActual = _.findWhere(scope.table.columns, { 'title': 'actual' });
+        const addTypical = _.findWhere(scope.table.columns, { 'title': 'typical' });
+        const addDescription = _.findWhere(scope.table.columns, { 'title': 'description' });
+        const addExamples = _.findWhere(scope.table.columns, { 'title': 'category examples' });
+        const addLinks = _.findWhere(scope.table.columns, { 'title': 'links' });
 
         const tableRow = [
           {
             markup: openRowArrow,
-            scope:  rowScope
+            scope: rowScope
           },
           {
             markup: formatTimestamp(record.time),
@@ -795,41 +774,42 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
           },
           {
             markup: parseInt(record['max severity']) >= 1 ?
-              '<i class="fa fa-exclamation-triangle icon-severity-' + getSeverity(record['max severity']) +
+              '<i class="fa fa-exclamation-triangle ml-icon-severity-' + getSeverity(record['max severity']) +
                 '" aria-hidden="true"></i> ' + Math.floor(record['max severity']) :
-              '<i class="fa fa-exclamation-triangle icon-severity-' + getSeverity(record['max severity']) +
+              '<i class="fa fa-exclamation-triangle ml-icon-severity-' + getSeverity(record['max severity']) +
                 '" aria-hidden="true"></i> &lt; 1',
-            value:  record['max severity']
+            value: record['max severity']
           },
           {
-            markup: record.detector,
-            value:  record.detector
+            markup: mlEscape(record.detector),
+            value: record.detector
           }
         ];
 
         if (addEntity !== undefined) {
           if (_.has(record, 'entityValue')) {
             if (record.entityName !== 'mlcategory') {
-              const safeEntityName = record.entityName.replace(/(['])/g, '\\$1');
-              const safeEntityValue = record.entityValue.replace(/(['])/g, '\\$1');
+              // Escape single quotes and backslash characters in the HTML for the event handlers.
+              const safeEntityName = mlEscape(record.entityName.replace(/(['\\])/g, '\\$1'));
+              const safeEntityValue = mlEscape(record.entityValue.replace(/(['\\])/g, '\\$1'));
 
               tableRow.push({
-                markup: record.entityValue +
-                  '<button ng-if="filteringEnabled"' +
+                markup: mlEscape(record.entityValue) +
+                  ' <button ng-if="filteringEnabled"' +
                   `ng-click="filter('${safeEntityName}', '${safeEntityValue}', '+')" ` +
                   'tooltip="Add filter" tooltip-append-to-body="1" aria-label="Filter for value">' +
                   '<i class="fa fa-search-plus" aria-hidden="true"></i></button>' +
-                  '<button ng-if="filteringEnabled"' +
+                  ' <button ng-if="filteringEnabled"' +
                   `ng-click="filter('${safeEntityName}', '${safeEntityValue}', '-')" ` +
                   'tooltip="Remove filter" tooltip-append-to-body="1" aria-label="Remove filter">' +
                   '<i class="fa fa-search-minus" aria-hidden="true"></i></button>',
-                value:  record.entityValue,
-                scope:  rowScope
+                value: record.entityValue,
+                scope: rowScope
               });
             } else {
               tableRow.push({
                 markup: 'mlcategory ' + record.entityValue,
-                value:  record.entityValue
+                value: record.entityValue
               });
             }
           } else {
@@ -845,12 +825,12 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
             let cellMarkup = '';
             _.each(record.influencers, (influencer) => {
               _.each(influencer, (influencerFieldValue, influencerFieldName) => {
-                cellMarkup += (influencerFieldName + ': ' + influencerFieldValue + '<br>');
+                cellMarkup += (mlEscape(influencerFieldName) + ': ' + mlEscape(influencerFieldValue) + '<br>');
               });
             });
             tableRow.push({
               markup: cellMarkup,
-              value:  cellMarkup
+              value: cellMarkup
             });
           } else {
             tableRow.push({
@@ -920,7 +900,7 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
         if (addExamples !== undefined) {
           if (record.entityName === 'mlcategory') {
             tableRow.push({ markup: '<span style="display: block; white-space:nowrap;" ' +
-              'ng-repeat="item in getExamplesForCategory(record.jobId, record.entityValue)">{{item}}</span>', scope:  rowScope });
+              'ng-repeat="item in getExamplesForCategory(record.jobId, record.entityValue)">{{item}}</span>', scope: rowScope });
           } else {
             tableRow.push({ markup: '', value: '' });
           }
@@ -937,11 +917,11 @@ module.directive('mlAnomaliesTable', function ($window, $route, timefilter,
         scope.categoryExamplesByJob = {};
         _.each(categoryIdsByJobId, (categoryIds, jobId) => {
           mlResultsService.getCategoryExamples(jobId, categoryIds, MAX_NUMBER_CATEGORY_EXAMPLES)
-          .then((resp) => {
-            scope.categoryExamplesByJob[jobId] = resp.examplesByCategoryId;
-          }).catch((resp) => {
-            console.log('Anomalies table - error getting category examples:', resp);
-          });
+            .then((resp) => {
+              scope.categoryExamplesByJob[jobId] = resp.examplesByCategoryId;
+            }).catch((resp) => {
+              console.log('Anomalies table - error getting category examples:', resp);
+            });
         });
       }
 

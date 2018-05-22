@@ -19,3 +19,4 @@ import './detectors_list_directive';
 import './save_status_modal';
 import './data_description';
 import './field_select_directive';
+import 'plugins/ml/components/job_group_select';

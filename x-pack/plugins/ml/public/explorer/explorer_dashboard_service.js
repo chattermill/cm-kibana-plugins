@@ -21,69 +21,24 @@
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
 
-module.service('mlExplorerDashboardService', function () {
+import { listenerFactoryProvider } from 'plugins/ml/factories/listener_factory';
 
-  const listeners = {
-    'swimlaneCellClick': [],
-    'swimlaneDataChange': [],
-    'anomalyDataChange': []
-  };
+module.service('mlExplorerDashboardService', function () {
+  this.allowCellRangeSelection = false;
+
+  const listenerFactory = listenerFactoryProvider();
+  const dragSelect = this.dragSelect = listenerFactory();
+  const swimlaneCellClick = this.swimlaneCellClick = listenerFactory();
+  const swimlaneDataChange = this.swimlaneDataChange = listenerFactory();
+  const swimlaneRenderDone = this.swimlaneRenderDone = listenerFactory();
+  this.anomalyDataChange = listenerFactory();
 
   this.init = function () {
     // Clear out any old listeners.
-    listeners.swimlaneCellClick.splice(0);
-    listeners.swimlaneDataChange.splice(0);
-  };
-
-  this.fireSwimlaneCellClick = function (cellData) {
-    listeners.swimlaneCellClick.forEach((listener) => {
-      listener(cellData);
-    });
-  };
-
-  this.addSwimlaneCellClickListener = function (listener) {
-    listeners.swimlaneCellClick.push(listener);
-  };
-
-  this.removeSwimlaneCellClickListener = function (listener) {
-    const index = listeners.swimlaneCellClick.indexOf(listener);
-    if (index > -1) {
-      listeners.swimlaneCellClick.splice(index, 1);
-    }
-  };
-
-  this.fireSwimlaneDataChange = function (swimlaneType) {
-    listeners.swimlaneDataChange.forEach((listener) => {
-      listener(swimlaneType);
-    });
-  };
-
-  this.addSwimlaneDataChangeListener = function (listener) {
-    listeners.swimlaneDataChange.push(listener);
-  };
-
-  this.removeSwimlaneDataChangeListener = function (listener) {
-    const index = listeners.swimlaneDataChange.indexOf(listener);
-    if (index > -1) {
-      listeners.swimlaneDataChange.splice(index, 1);
-    }
-  };
-
-  this.fireAnomalyDataChange = function (anomalyRecords, earliestMs, latestMs) {
-    listeners.anomalyDataChange.forEach((listener) => {
-      listener(anomalyRecords, earliestMs, latestMs);
-    });
-  };
-
-  this.addAnomalyDataChangeListener = function (listener) {
-    listeners.anomalyDataChange.push(listener);
-  };
-
-  this.removeAnomalyDataChangeListener = function (listener) {
-    const index = listeners.anomalyDataChange.indexOf(listener);
-    if (index > -1) {
-      listeners.anomalyDataChange.splice(index, 1);
-    }
+    dragSelect.unwatchAll();
+    swimlaneCellClick.unwatchAll();
+    swimlaneDataChange.unwatchAll();
+    swimlaneRenderDone.unwatchAll();
   };
 
 });

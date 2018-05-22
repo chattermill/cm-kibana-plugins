@@ -26,13 +26,13 @@ module.service('mlESMappingService', function ($q, mlJobService) {
     const deferred = $q.defer();
 
     mlJobService.getESMappings()
-    .then(indices => {
-      this.indices = indices;
-      deferred.resolve(indices);
+      .then(indices => {
+        this.indices = indices;
+        deferred.resolve(indices);
 
-    }).catch(err => {
-      console.log('getMappings:', err);
-    });
+      }).catch(err => {
+        console.log('getMappings:', err);
+      });
 
     return deferred.promise;
   };
@@ -56,7 +56,9 @@ module.service('mlESMappingService', function ($q, mlJobService) {
       });
       types = Object.keys(tempTypes);
     } else {
-      types = Object.keys(this.indices[index].types);
+      if (this.indices[index] !== undefined) {
+        types = Object.keys(this.indices[index].types);
+      }
     }
 
     return types;

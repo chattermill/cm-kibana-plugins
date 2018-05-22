@@ -4,6 +4,7 @@ import {
   unhashUrl,
 } from 'ui/state_management/state_hashing';
 import moment from 'moment-timezone';
+import { getLayout } from './layouts';
 
 export function JobParamsProvider(Private, config) {
   const getUnhashableStates = Private(getUnhashableStatesProvider);
@@ -52,12 +53,17 @@ export function JobParamsProvider(Private, config) {
     return {
       savedObjectId: objectId,
       objectType: appType.objectType,
-      queryString: encodeURIComponent(query),
-      browserTimezone: encodeURIComponent(browserTimezone)
+      queryString: query,
+      browserTimezone: browserTimezone
     };
   }
 
-  return function jobParams() {
-    return parseFromUrl(window.location.href);
+  return function jobParams(controller, options) {
+    const layout = getLayout(options.layoutId);
+
+    return {
+      ...parseFromUrl(window.location.href),
+      layout: layout.getJobParams(),
+    };
   };
 }

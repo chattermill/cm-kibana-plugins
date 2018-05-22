@@ -29,59 +29,59 @@ function sortByName(item) {
   return [ item.name ];
 }
 
-export const Assigned = React.createClass({
-  createShard: function (shard, index) {
+export class Assigned extends React.Component {
+  createShard = (shard) => {
     const type = shard.primary ? 'primary' : 'replica';
-    const additionId = shard.state === 'UNASSIGNED' ? Math.random() : '';
-    const key = `${shard.index}.${shard.node}.${type}.${shard.state}.${shard.shard}${additionId}-${index}`;
+    const key = `${shard.index}.${shard.node}.${type}.${shard.state}.${shard.shard}`;
     return (
-      <Shard shard={ shard } key={ key }/>
+      <Shard shard={shard} key={key}/>
     );
-  },
-  createChild: function (data) {
+  };
+
+  createChild = (data) => {
     const key = data.id;
-    const classes = ['child'];
+    const initialClasses = ['child'];
     const shardStats = get(this.props.shardStats.indices, key);
     if (shardStats) {
-      classes.push(shardStats.status);
+      initialClasses.push(shardStats.status);
     }
 
-    const that = this;
-    const changeUrl = function () {
-      that.props.changeUrl(generateQueryAndLink(data));
+    const changeUrl = () => {
+      this.props.changeUrl(generateQueryAndLink(data));
     };
 
     // TODO: redesign for shard allocation, possibly giving shard display the
     // ability to use the kuiLink CSS class (blue link text instead of white link text)
     const name = (
       <KuiKeyboardAccessible>
-        <a onClick={ changeUrl }>
-          <span>{ data.name }</span>
+        <a onClick={changeUrl}>
+          <span>{data.name}</span>
         </a>
       </KuiKeyboardAccessible>
     );
-    let master;
-    if (data.node_type === 'master') {
-      master = (
-        <span className="fa fa-star"></span>
-      );
-    }
+    const master = (data.node_type === 'master') ? <span className="fa fa-star" /> : null;
     const shards = sortBy(data.children, 'shard').map(this.createShard);
     return (
-      <div className={ calculateClass(data, classes.join(' ')) } key={ key }>
-        <div className='title'>{ name }{ master }</div>
-        { shards }
+      <div
+        className={calculateClass(data, initialClasses.join(' '))}
+        key={key}
+        data-test-subj={`clusterView-Assigned-${key}`}
+        data-status={shardStats && shardStats.status}
+      >
+        <div className="title">{name}{master}</div>
+        {shards}
       </div>
     );
-  },
-  render: function () {
+  };
+
+  render() {
     const data = sortBy(this.props.data, sortByName).map(this.createChild);
     return (
       <td>
-        <div className='children'>
-          { data }
+        <div className="children">
+          {data}
         </div>
       </td>
     );
   }
-});
+}

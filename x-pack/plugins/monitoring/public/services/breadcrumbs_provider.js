@@ -1,5 +1,11 @@
 // Helper for making objects to use in a link element
-const createCrumb = (url, label) => ({ url, label });
+const createCrumb = (url, label, testSubj) => {
+  const crumb = { url, label };
+  if (testSubj) {
+    crumb.testSubj = testSubj;
+  }
+  return crumb;
+};
 
 // generate Elasticsearch breadcrumbs
 function getElasticsearchBreadcrumbs(mainInstance) {
@@ -7,9 +13,9 @@ function getElasticsearchBreadcrumbs(mainInstance) {
   if (mainInstance.instance) {
     breadcrumbs.push(createCrumb('#/elasticsearch', 'Elasticsearch'));
     if (mainInstance.name === 'indices') {
-      breadcrumbs.push(createCrumb('#/elasticsearch/indices', 'Indices'));
+      breadcrumbs.push(createCrumb('#/elasticsearch/indices', 'Indices', 'breadcrumbEsIndices'));
     } else if (mainInstance.name === 'nodes') {
-      breadcrumbs.push(createCrumb('#/elasticsearch/nodes', 'Nodes'));
+      breadcrumbs.push(createCrumb('#/elasticsearch/nodes', 'Nodes', 'breadcrumbEsNodes'));
     } else if (mainInstance.name === 'ml') {
       // ML Instance (for user later)
       breadcrumbs.push(createCrumb('#/elasticsearch/ml_jobs', 'Jobs'));
@@ -47,7 +53,6 @@ function getLogstashBreadcrumbs(mainInstance) {
   } else if (mainInstance.page === 'pipeline') {
     breadcrumbs.push(createCrumb('#/logstash', 'Logstash'));
     breadcrumbs.push(createCrumb('#/logstash/pipelines', 'Pipelines'));
-    breadcrumbs.push(createCrumb(null, mainInstance.pipelineId));
   } else {
     // don't link to Overview when we're possibly on Overview or its sibling tabs
     breadcrumbs.push(createCrumb(null, 'Logstash'));
@@ -56,9 +61,23 @@ function getLogstashBreadcrumbs(mainInstance) {
   return breadcrumbs;
 }
 
+// generate Beats breadcrumbs
+function getBeatsBreadcrumbs(mainInstance) {
+  const breadcrumbs = [];
+  if (mainInstance.instance) {
+    breadcrumbs.push(createCrumb('#/beats', 'Beats'));
+    breadcrumbs.push(createCrumb('#/beats/beats', 'Instances'));
+    breadcrumbs.push(createCrumb(null, mainInstance.instance));
+  } else {
+    breadcrumbs.push(createCrumb(null, 'Beats'));
+  }
+
+  return breadcrumbs;
+}
+
 export function breadcrumbsProvider() {
   return function createBreadcrumbs(clusterName, mainInstance) {
-    let breadcrumbs = [ createCrumb('#/home', 'Clusters') ];
+    let breadcrumbs = [ createCrumb('#/home', 'Clusters', 'breadcrumbClusters') ];
 
     if (!mainInstance.inOverview && clusterName) {
       breadcrumbs.push(createCrumb('#/overview', clusterName));
@@ -72,6 +91,9 @@ export function breadcrumbsProvider() {
     }
     if (mainInstance.inLogstash) {
       breadcrumbs = breadcrumbs.concat(getLogstashBreadcrumbs(mainInstance));
+    }
+    if (mainInstance.inBeats) {
+      breadcrumbs = breadcrumbs.concat(getBeatsBreadcrumbs(mainInstance));
     }
 
     return breadcrumbs;

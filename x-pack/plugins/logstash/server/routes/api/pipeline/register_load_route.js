@@ -13,7 +13,8 @@ function fetchPipeline(callWithRequest, pipelineId) {
       'description',
       'username',
       'pipeline'
-    ]
+    ],
+    ignore: [ 404 ]
   });
 }
 
@@ -28,11 +29,15 @@ export function registerLoadRoute(server) {
       const pipelineId = request.params.id;
 
       return fetchPipeline(callWithRequest, pipelineId)
-      .then((pipelineResponseFromES) => {
-        const pipeline = Pipeline.fromUpstreamJSON(pipelineResponseFromES);
-        reply({ pipeline });
-      })
-      .catch((e) => reply(Boom.internal(e)));
+        .then((pipelineResponseFromES) => {
+          if (!pipelineResponseFromES.found) {
+            return reply(Boom.notFound());
+          }
+
+          const pipeline = Pipeline.fromUpstreamJSON(pipelineResponseFromES);
+          reply({ pipeline });
+        })
+        .catch((e) => reply(Boom.internal(e)));
     },
     config: {
       pre: [ licensePreRouting ]

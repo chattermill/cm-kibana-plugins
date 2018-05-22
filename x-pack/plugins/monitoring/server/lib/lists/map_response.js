@@ -53,20 +53,19 @@ function calcSlope(data) {
  * Calculation rules per type
  */
 function calculateMetrics(type, partialBucketFilter) {
-  // Rich statistics calculated only for nodes. Indices only needs lastVal
+  // Rich statistics calculated only for nodes
   let minVal;
   let maxVal;
   let slope;
   let lastVal;
 
   const calculators = {
-
     nodes: function (buckets, metric) {
       const results = _.chain(buckets)
-      .filter(partialBucketFilter) // buckets with whole start/end time range
-      .map(mapChartData(metric)) // calculate metric as X/Y
-      .filter(result => !!result && (!!result.y || result.y === 0)) // take only non-null values
-      .value();
+        .filter(partialBucketFilter) // buckets with whole start/end time range
+        .map(mapChartData(metric)) // calculate metric as X/Y
+        .filter(result => !!result && (!!result.y || result.y === 0)) // take only non-null values
+        .value();
 
       minVal = _.min(_.pluck(results, 'y'));
       maxVal = _.max(_.pluck(results, 'y'));
@@ -74,27 +73,7 @@ function calculateMetrics(type, partialBucketFilter) {
       lastVal = _.last(_.pluck(results, 'y'));
 
       return { minVal, maxVal, slope, lastVal };
-    },
-
-    indices: function (buckets, metric) {
-      // just find the last whole bucket
-      let currentBucket;
-      let idx = buckets.length - 1;
-      while (idx > -1) {
-        currentBucket = buckets[idx];
-        if (currentBucket.doc_count > 0 && partialBucketFilter(currentBucket)) {
-          // found the last whole bucket
-          break;
-        }
-        idx -= 1;
-      }
-
-      // the y-val can't be undefined, or else table column sorting won't work
-      lastVal = mapChartData(metric)(currentBucket).y || 0;
-
-      return { minVal, maxVal, slope, lastVal };
     }
-
   };
 
   return calculators[type];
@@ -106,7 +85,6 @@ function reduceMetrics(options) {
   const metricCalculator = calculateMetrics(type, partialBucketFilter);
 
   const reducers = {
-
     nodes(metricName) {
       const metric = metrics[metricName];
       const buckets = item[metricName].buckets;
@@ -118,18 +96,7 @@ function reduceMetrics(options) {
         slope: slope,
         last: lastVal
       };
-    },
-
-    indices(metricName) {
-      const metric = metrics[metricName];
-      const buckets = item[metricName].buckets;
-      const { lastVal } = metricCalculator(buckets, metric);
-      return {
-        metric: pickMetricFields(metric),
-        last: lastVal
-      };
     }
-
   };
 
   return reducers[type];
@@ -153,4 +120,4 @@ export function mapResponse(options) {
       metrics: getMappedMetrics({ item, ...options })
     };
   });
-};
+}

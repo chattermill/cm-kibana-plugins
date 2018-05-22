@@ -32,17 +32,17 @@ module.controller('MlCreateWatchModal', function ($scope, $modalInstance, params
 
   $scope.apply = function () {
     mlCreateWatchService.createNewWatch($scope.jobId)
-    .catch((resp) => {
-      msgs.clear();
-      msgs.error('Watch could not be saved');
-      if (typeof resp === 'string') {
-        msgs.error(resp);
-      }
-      $scope.status.watch = null;
-    });
+      .catch((resp) => {
+        msgs.clear();
+        msgs.error('Watch could not be saved');
+        if (typeof resp === 'string') {
+          msgs.error(resp);
+        }
+        $scope.status.watch = null;
+      });
   };
 
   $scope.close = function () {
-    $modalInstance.dismiss('cancel');
+    $modalInstance.close();
   };
 });

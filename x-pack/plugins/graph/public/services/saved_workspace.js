@@ -33,7 +33,7 @@ export function SavedWorkspaceProvider(courier) {
       };
     }
 
-  }; //End of class
+  } //End of class
 
   SavedWorkspace.type = 'graph-workspace';
 

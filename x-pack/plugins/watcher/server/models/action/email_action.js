@@ -1,3 +1,4 @@
+import { badRequest } from 'boom';
 import { BaseAction } from './base_action';
 import { ACTION_TYPES } from '../../../common/constants';
 
@@ -12,8 +13,8 @@ export class EmailAction extends BaseAction {
   }
 
   // To Kibana
-  get downstreamJSON() {
-    const result = super.downstreamJSON;
+  get downstreamJson() {
+    const result = super.downstreamJson;
     Object.assign(result, {
       to: this.to,
       subject: this.subject,
@@ -24,8 +25,8 @@ export class EmailAction extends BaseAction {
   }
 
   // From Kibana
-  static fromDownstreamJSON(json) {
-    const props = super.getPropsFromDownstreamJSON(json);
+  static fromDownstreamJson(json) {
+    const props = super.getPropsFromDownstreamJson(json);
 
     Object.assign(props, {
       to: json.to,
@@ -37,17 +38,22 @@ export class EmailAction extends BaseAction {
   }
 
   // To Elasticsearch
-  get upstreamJSON() {
-    const result = super.upstreamJSON;
+  get upstreamJson() {
+    const result = super.upstreamJson;
+
+    const optionalFields = {};
+    if (this.subject) {
+      optionalFields.subject = this.subject;
+    }
+    if (this.body) {
+      optionalFields.body = { text: this.body };
+    }
 
     result[this.id] = {
       email: {
         profile: 'standard',
         to: this.to,
-        subject: this.subject,
-        body: {
-          text: this.body
-        }
+        ...optionalFields,
       }
     };
 
@@ -55,26 +61,28 @@ export class EmailAction extends BaseAction {
   }
 
   // From Elasticsearch
-  static fromUpstreamJSON(json) {
-    const props = super.getPropsFromUpstreamJSON(json);
+  static fromUpstreamJson(json) {
+    const props = super.getPropsFromUpstreamJson(json);
 
     if (!json.actionJson.email) {
-      throw new Error('json argument must contain an actionJson.email property');
+      throw badRequest('json argument must contain an actionJson.email property');
     }
     if (!json.actionJson.email.to) {
-      throw new Error('json argument must contain an actionJson.email.to property');
+      throw badRequest('json argument must contain an actionJson.email.to property');
     }
-    if (!json.actionJson.email.subject) {
-      throw new Error('json argument must contain an actionJson.email.subject property');
+
+    const optionalFields = {};
+    if (json.actionJson.email.subject) {
+      optionalFields.subject = json.actionJson.email.subject;
     }
-    if (!json.actionJson.email.body) {
-      throw new Error('json argument must contain an actionJson.email.body property');
+    if (json.actionJson.email.body) {
+      optionalFields.body = json.actionJson.email.body.text;
     }
 
     Object.assign(props, {
       to: json.actionJson.email.to,
       subject: json.actionJson.email.subject,
-      body: json.actionJson.email.body.text
+      ...optionalFields,
     });
 
     return new EmailAction(props);
@@ -93,4 +101,4 @@ export class EmailAction extends BaseAction {
     }
   }
   */
-};
+}

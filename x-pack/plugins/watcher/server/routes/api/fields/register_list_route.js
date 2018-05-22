@@ -30,12 +30,12 @@ export function registerListRoute(server) {
       return fetchFields(callWithRequest, indexes)
         .then(response => {
           const json = (response.status === 404)
-             ? { fields: [] }
-             : response;
+            ? { fields: [] }
+            : response;
 
-          const fields = Fields.fromUpstreamJSON(json);
+          const fields = Fields.fromUpstreamJson(json);
 
-          reply(fields.downstreamJSON);
+          reply(fields.downstreamJson);
         })
         .catch(err => {
           // Case: Error from Elasticsearch JS client

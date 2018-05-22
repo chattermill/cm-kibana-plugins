@@ -15,6 +15,10 @@ export class PluginVertex extends Vertex {
     return this.json.config_name;
   }
 
+  get title() {
+    return this.name;
+  }
+
   get pluginType() {
     return this.json.plugin_type;
   }
@@ -56,7 +60,7 @@ export class PluginVertex extends Vertex {
       return 0;
     }
 
-    const meanmillisPerEvent = this.graph.processorVertices.reduce((acc,v) => {
+    const meanmillisPerEvent = this.graph.processorVertices.reduce((acc, v) => {
       return acc + v.millisPerEvent || 0;
     }, 0) / totalProcessorVertices;
 

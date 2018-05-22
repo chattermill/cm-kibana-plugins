@@ -4,8 +4,6 @@ import $ from 'jquery-flot'; // webpackShim
 import { eventBus } from './event_bus';
 import { getChartOptions } from './get_chart_options';
 
-const RESIZE_TIMEOUT = 250; // resize handler to execute at a rate of 4fps
-
 export class ChartTarget extends React.Component {
   shouldComponentUpdate() {
     return !this.plot;
@@ -30,7 +28,7 @@ export class ChartTarget extends React.Component {
 
   componentWillUnmount() {
     this.shutdownChart();
-    window.removeEventListener('resize', this.resizeThrottler);
+    window.removeEventListener('resize', this._handleResize);
   }
 
   filterByShow(seriesToShow) {
@@ -58,10 +56,7 @@ export class ChartTarget extends React.Component {
 
   componentDidMount() {
     this.renderChart();
-    window.addEventListener('resize', this.resizeThrottler, false);
-
-    // resizes legend container after each series is initialized
-    this.resizeThrottler();
+    window.addEventListener('resize', this._handleResize, false);
   }
 
   componentDidUpdate() {
@@ -71,8 +66,8 @@ export class ChartTarget extends React.Component {
 
   filterData(data, seriesToShow) {
     return _(data)
-    .filter(this.filterByShow(seriesToShow))
-    .value();
+      .filter(this.filterByShow(seriesToShow))
+      .value();
   }
 
   getOptions() {
@@ -81,7 +76,10 @@ export class ChartTarget extends React.Component {
       xaxis: this.props.timeRange
     });
 
-    return _.assign(opts, this.props.options);
+    return {
+      ...opts,
+      ...this.props.options
+    };
   }
 
   renderChart() {
@@ -104,17 +102,6 @@ export class ChartTarget extends React.Component {
          * continously so the proper resize will happen in a later firing of
          * the event */
       }
-    };
-
-    // simulate the "end" of the resize action
-    // needs setTimeout/clearTimeout since resize events are continous
-    // http://stackoverflow.com/a/5490021
-    let resizeTimeout;
-    this.resizeThrottler = () => {
-      resizeTimeout = window.setTimeout(() => {
-        clearTimeout(resizeTimeout);
-        this._handleResize(); // actual resize handler
-      }, RESIZE_TIMEOUT);
     };
 
     this.handleMouseLeave = () => {
@@ -181,7 +168,7 @@ export class ChartTarget extends React.Component {
     };
 
     return (
-      <div ref="target" style={ style } />
+      <div ref="target" style={style} />
     );
   }
 }

@@ -38,6 +38,7 @@ export function dashboardMode(kibana) {
           'visRequestHandlers',
           'visEditorTypes',
           'savedObjectTypes',
+          'embeddableFactories',
           'spyModes',
           'navbarExtensions',
           'docViews',
@@ -70,7 +71,7 @@ export function dashboardMode(kibana) {
         server.plugins.security.registerAuthScopeGetter(getDashboardModeAuthScope);
 
         // extend the server to intercept requests
-        const dashboardViewerApp = kibana.uiExports.getHiddenApp('dashboardViewer');
+        const dashboardViewerApp = server.getHiddenUiAppById('dashboardViewer');
         server.ext(createDashboardModeRequestInterceptor(dashboardViewerApp));
       }
     }

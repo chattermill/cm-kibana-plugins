@@ -1,74 +1,92 @@
-import { capitalize } from 'lodash';
 import React from 'react';
-import { Tooltip } from 'plugins/monitoring/components/tooltip';
 import { FormattedMessage } from 'plugins/monitoring/components/alerts/formatted_message';
-import { SeverityIcon } from 'plugins/monitoring/components/alerts/severity_icon';
 import { mapSeverity } from 'plugins/monitoring/components/alerts/map_severity';
-import { KuiKeyboardAccessible } from 'ui_framework/components';
-import { formatTimestampToDuration } from 'plugins/monitoring/lib/format_number';
+import { formatTimestampToDuration } from 'monitoring-common';
 import { CALCULATE_DURATION_SINCE } from 'monitoring-constants';
 import { formatDateTimeLocal } from 'monitoring-formatting';
 
-export function AlertsPanel({ alerts, angularChangeUrl }) {
-  const goToAlerts = () => angularChangeUrl('/alerts');
+import {
+  EuiFlexGroup,
+  EuiFlexItem,
+  EuiTitle,
+  EuiButton,
+  EuiText,
+  EuiTextColor,
+  EuiSpacer,
+  EuiCallOut,
+} from '@elastic/eui';
+
+export function AlertsPanel({ alerts, changeUrl }) {
+  const goToAlerts = () => changeUrl('/alerts');
 
   if (!alerts || !alerts.length) {
     // no-op
     return null;
   }
 
-  // enclosed component for accessing angularChangeUrl
+  // enclosed component for accessing changeUrl
   function TopAlertItem({ item, index }) {
+    const severityIcon = mapSeverity(item.metadata.severity);
+
+    if (item.resolved_timestamp) {
+      severityIcon.title =
+        `${severityIcon.title} (resolved ${formatTimestampToDuration(item.resolved_timestamp, CALCULATE_DURATION_SINCE)} ago)`;
+      severityIcon.color = "success";
+      severityIcon.iconType = "check";
+    }
+
     return (
-      <div key={ `alert-item-${index}` } className='kuiMenuItem'>
-        <div className='kuiEvent'>
-          <div className='kuiEventSymbol'>
-            <Tooltip text={ `${capitalize(mapSeverity(item.metadata.severity))} severity alert` } placement='bottom' trigger='hover'>
-              <SeverityIcon severity={ item.metadata.severity } />
-            </Tooltip>
-          </div>
-
-          <div className='kuiEventBody'>
-            <div className='kuiEventBody__message'>
-              <FormattedMessage
-                prefix={ item.prefix }
-                suffix={ item.suffix }
-                message={ item.message }
-                metadata={ item.metadata }
-                angularChangeUrl={ angularChangeUrl }
-              />
-            </div>
-
-            <div className='kuiEventBody__metadata'>
+      <EuiCallOut
+        key={`alert-item-${index}`}
+        data-test-subj="topAlertItem"
+        className="kuiVerticalRhythm"
+        iconType={severityIcon.iconType}
+        color={severityIcon.color}
+        title={severityIcon.title}
+      >
+        <FormattedMessage
+          prefix={item.prefix}
+          suffix={item.suffix}
+          message={item.message}
+          metadata={item.metadata}
+          changeUrl={changeUrl}
+        />
+        <EuiText size="xs">
+          <p data-test-subj="alertMeta">
+            <EuiTextColor color="subdued">
               Last checked {
                 formatDateTimeLocal(item.update_timestamp)
-              } (since {
+              } (triggered {
                 formatTimestampToDuration(item.timestamp, CALCULATE_DURATION_SINCE)
               } ago)
-            </div>
-          </div>
-        </div>
-      </div>
+            </EuiTextColor>
+          </p>
+        </EuiText>
+      </EuiCallOut>
     );
   }
 
-  const topAlertItems = alerts.map((item, index) => <TopAlertItem item={ item } key={ `top-alert-item-${index}` } index={ index } />);
+  const topAlertItems = alerts.map((item, index) => <TopAlertItem item={item} key={`top-alert-item-${index}`} index={index} />);
 
   return (
-    <div>
-      <h2 className='kuiSubTitle kuiVerticalRhythm'>
-        Top Cluster Alerts
-      </h2>
-      <div className='kuiMenu kuiMenu--contained kuiVerticalRhythm'>
-        { topAlertItems }
-      </div>
-      <p className='kuiText kuiVerticalRhythm'>
-        <KuiKeyboardAccessible>
-          <a className='kuiLink' onClick={ goToAlerts } >
-            View all { alerts.total } alerts
-          </a>
-        </KuiKeyboardAccessible>
-      </p>
+    <div data-test-subj="clusterAlertsContainer">
+      <EuiFlexGroup justifyContent="spaceBetween">
+        <EuiFlexItem grow={false}>
+          <EuiTitle>
+            <h2>
+              Top cluster alerts
+            </h2>
+          </EuiTitle>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiButton size="s" onClick={goToAlerts} data-test-subj="viewAllAlerts">
+            View all alerts
+          </EuiButton>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+      <EuiSpacer size="m" />
+      { topAlertItems }
+      <EuiSpacer size="xxl" />
     </div>
   );
 }

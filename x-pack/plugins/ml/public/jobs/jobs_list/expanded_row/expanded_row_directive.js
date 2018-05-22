@@ -16,9 +16,12 @@
 import _ from 'lodash';
 import moment from 'moment';
 import { toLocaleString, detectorToString } from 'plugins/ml/util/string_utils';
+import { JOB_STATE, DATAFEED_STATE } from 'plugins/ml/../common/constants/states';
+import { ML_DATA_PREVIEW_COUNT } from 'plugins/ml/../common/util/job_utils';
 import numeral from 'numeral';
 import chrome from 'ui/chrome';
 import angular from 'angular';
+import template from './expanded_row.html';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
@@ -27,8 +30,12 @@ module.directive('mlJobListExpandedRow', function ($location, mlMessageBarServic
   return {
     restrict: 'AE',
     replace: false,
-    scope: {},
-    template: require('plugins/ml/jobs/jobs_list/expanded_row/expanded_row.html'),
+    scope: {
+      currentTab: '=',
+      jobAudit: '=',
+      closeJob: '='
+    },
+    template,
     link: function ($scope, $element) {
       const msgs = mlMessageBarService; // set a reference to the message bar service
       const TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss';
@@ -41,8 +48,9 @@ module.directive('mlJobListExpandedRow', function ($location, mlMessageBarServic
       // scope population is inside a function so it can be called later from somewhere else
       $scope.init = function () {
         $scope.job = $scope.$parent.job;
-        $scope.jobAudit = $scope.$parent.jobAudit;
-        $scope.jobJson = angular.toJson($scope.job, true);
+        const tempJob = angular.copy($scope.job);
+        delete tempJob.calendars;
+        $scope.jobJson = angular.toJson(tempJob, true);
         $scope.jobAuditText = '';
         $scope.datafeedPreview = {
           update: updateDatafeedPreview,
@@ -50,40 +58,68 @@ module.directive('mlJobListExpandedRow', function ($location, mlMessageBarServic
         };
 
         $scope.detectorToString = detectorToString;
+        $scope.JOB_STATE = JOB_STATE;
+        $scope.DATAFEED_STATE = DATAFEED_STATE;
 
         $scope.ui = {
-          currentTab: 0,
+          currentTab: $scope.currentTab,
           tabs: [
             { index: 0, title: 'Job settings' },
             { index: 1, title: 'Job config' },
             { index: 3, title: 'Counts' },
             { index: 4, title: 'JSON' },
-            { index: 5, title: 'Job messages' , showIcon: true },
+            { index: 5, title: 'Job messages', showIcon: true },
             { index: 6, title: 'Datafeed preview' },
           ],
           changeTab: function (tab) {
-            this.currentTab = tab.index;
+            this.currentTab.index = tab.index;
 
             if (tab.index === 5) {
               // when Job Message tab is clicked, load all the job messages for the last month
               // use the promise chain returned from update to scroll to the bottom of the
               // list once it's loaded
               $scope.jobAudit.update()
-              .then(() => {
+                .then(() => {
                 // auto scroll to the bottom of the message list.
-                const div = angular.element('#ml-job-audit-list-' + $scope.job.job_id);
-                if (div && div.length) {
+                  const div = angular.element('#ml-job-audit-list-' + $scope.job.job_id);
+                  if (div && div.length) {
                   // run this asynchronously in a timeout to allow angular time to render the contents first
-                  window.setTimeout(() => {
-                    const table = div.find('table');
-                    if (table && table.length) {
-                      div[0].scrollTop = table[0].offsetHeight - div[0].offsetHeight + 14;
-                    }
-                  }, 0);
-                }
-              });
+                    window.setTimeout(() => {
+                      const table = div.find('table');
+                      if (table && table.length) {
+                        div[0].scrollTop = table[0].offsetHeight - div[0].offsetHeight + 14;
+                      }
+                    }, 0);
+                  }
+                });
             } else if (tab.index === 6) {
               updateDatafeedPreview();
+            }
+          },
+          closeJobDisabled() {
+            if ($scope.job.datafeed_config &&
+              $scope.job.datafeed_config.state === DATAFEED_STATE.STOPPED &&
+              $scope.job.state === JOB_STATE.OPENED) {
+              return false;
+            }
+            else if (($scope.job.datafeed_config === undefined ||
+              $scope.job.datafeed_config.datafeed_id === undefined) &&
+              $scope.job.state === JOB_STATE.OPENED) {
+              return false;
+            }
+            else if ($scope.job.state === JOB_STATE.FAILED) {
+              return false;
+            } else {
+              return true;
+            }
+          },
+          getCloseJobTooltip() {
+            if ($scope.job.datafeed_config && $scope.job.datafeed_config.state === DATAFEED_STATE.STARTED) {
+              return 'Datafeed must be stopped to close job';
+            } else if ($scope.job.state === JOB_STATE.CLOSED) {
+              return 'Job already closed';
+            } else {
+              return '';
             }
           }
         };
@@ -101,17 +137,27 @@ module.directive('mlJobListExpandedRow', function ($location, mlMessageBarServic
             $scope.job.endpoints[i] = replaceHost(url);
           });
         }
+
+        // call changeTab on initialization.
+        // as the current tab may not be 0, if the list has been redrawn.
+        // calling changeTab causes the audit or datafeed preview to be triggered
+        // and thus refreshes the content if the current tab is 5 or 6
+        $scope.ui.changeTab($scope.ui.currentTab);
       };
 
       function updateDatafeedPreview() {
         $scope.datafeedPreview.json = '';
         mlJobService.getDatafeedPreview($scope.job.job_id)
-        .then((resp) => {
-          $scope.datafeedPreview.json = angular.toJson(resp, true);
-        })
-        .catch((resp) => {
-          msgs.error('Datefeed preview could not be loaded', resp);
-        });
+          .then((resp) => {
+            if (Array.isArray(resp)) {
+              $scope.datafeedPreview.json = angular.toJson(resp.slice(0, ML_DATA_PREVIEW_COUNT), true);
+            } else {
+              msgs.error('Datefeed preview could not be loaded', resp);
+            }
+          })
+          .catch((resp) => {
+            msgs.error('Datefeed preview could not be loaded', resp);
+          });
       }
 
       // call function defined above.
@@ -181,17 +227,18 @@ module.directive('mlJobListExpandedRow', function ($location, mlMessageBarServic
     },
   };
 })
-// custom filter to filter out objects from a collection
+// custom filter to filter out objects but allow arrays in a collection
 // used when listing job settings, as id and state are siblings to objects like counts and data_description
-.filter('filterObjects', function () {
-  return function (input) {
-    const tempObj = {};
-    _.each(input, (v,i) => {
-      if (typeof v !== 'object') {
-        tempObj[i] = v;
-      }
-    });
-    return tempObj;
-  };
-});
+  .filter('filterObjects', function () {
+    return function (input, allowArrays = false) {
+      const tempObj = {};
+      _.each(input, (v, i) => {
+        const isObj = typeof v === 'object';
+        if (isObj === false || (allowArrays && isObj && Array.isArray(v))) {
+          tempObj[i] = v;
+        }
+      });
+      return tempObj;
+    };
+  });
 

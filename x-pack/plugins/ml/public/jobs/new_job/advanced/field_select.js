@@ -1,4 +1,5 @@
-import React, { Component, PropTypes } from 'react';
+import PropTypes from 'prop-types';
+import React, { Component } from 'react';
 import _ from 'lodash';
 import Select from 'react-select';
 import 'react-select/dist/react-select.css';
@@ -6,6 +7,7 @@ import 'react-select/dist/react-select.css';
 export class FieldSelect extends Component {
   render() {
     const {
+      labelId,
       onChange,
       value,
       options,
@@ -28,15 +30,19 @@ export class FieldSelect extends Component {
 
     return (
       <Select
-        placeholder={ placeholder }
-        options= { getOptions() }
-        value={ value }
-        onChange={ change }/>
+        aria-describedby={'ml_aria_description_' + labelId}
+        aria-labelledby={'ml_aria_label_' + labelId}
+        placeholder={placeholder}
+        options={getOptions()}
+        value={value}
+        onChange={change}
+      />
     );
   }
 }
 
 FieldSelect.propTypes = {
+  labelId: PropTypes.string,
   onChange: PropTypes.func,
   value: PropTypes.string,
   options: PropTypes.object,

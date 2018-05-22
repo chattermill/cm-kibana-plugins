@@ -1,10 +1,11 @@
 import { notFound } from 'boom';
-import { get, set, findIndex } from 'lodash';
+import { set, findIndex } from 'lodash';
 import { getClustersStats } from './get_clusters_stats';
 import { flagSupportedClusters } from './flag_supported_clusters';
-import { getMlJobsForCluster } from '../elasticsearch/get_ml_jobs';
-import { getKibanasForClusters } from '../kibana/get_kibanas_for_clusters';
-import { getLogstashForClusters } from '../logstash/get_logstash_for_clusters';
+import { getMlJobsForCluster } from '../elasticsearch';
+import { getKibanasForClusters } from '../kibana';
+import { getLogstashForClusters } from '../logstash';
+import { getBeatsForClusters } from '../beats';
 import { calculateOverallStatus } from '../calculate_overall_status';
 import { alertsClustersAggregation } from '../../cluster_alerts/alerts_clusters_aggregation';
 import { alertsClusterSearch } from '../../cluster_alerts/alerts_cluster_search';
@@ -31,19 +32,14 @@ export function normalizeClustersData(clusters) {
   return clusters;
 }
 
-/*
- * Get ojects for a single cluster (if req.params.clusterUuid) is defined or all clusters
+/**
+ * Get all clusters or the cluster associated with {@code clusterUuid} when it is defined.
  */
-export async function getClustersFromRequest(req) {
-  const config = req.server.config();
-  const esIndexPattern = config.get('xpack.monitoring.elasticsearch.index_pattern');
-  const kibanaIndexPattern = config.get('xpack.monitoring.kibana.index_pattern');
-  const logstashIndexPattern = config.get('xpack.monitoring.logstash.index_pattern');
-  const clusterUuid = get(req.params, 'clusterUuid');
+export async function getClustersFromRequest(req, indexPatterns, { clusterUuid, start, end } = {}) {
+  const { esIndexPattern, kbnIndexPattern, lsIndexPattern, beatsIndexPattern, alertsIndex } = indexPatterns;
 
-  let clusters;
   // get clusters with stats and cluster state
-  clusters = await getClustersStats(req, esIndexPattern, clusterUuid);
+  let clusters = await getClustersStats(req, esIndexPattern, clusterUuid);
 
   // TODO: this handling logic should be two different functions
   if (clusterUuid) { // if not undefined, get specific cluster (no need for license checking)
@@ -58,7 +54,11 @@ export async function getClustersFromRequest(req) {
     if (mlJobs !== null) {
       cluster.ml = { jobs: mlJobs };
     }
-    const alerts = await alertsClusterSearch(req, cluster, checkLicenseForAlerts, { size: CLUSTER_ALERTS_SEARCH_SIZE });
+    const alerts = await alertsClusterSearch(req, alertsIndex, cluster, checkLicenseForAlerts, {
+      start,
+      end,
+      size: CLUSTER_ALERTS_SEARCH_SIZE
+    });
     if (alerts) {
       cluster.alerts = alerts;
     }
@@ -71,25 +71,24 @@ export async function getClustersFromRequest(req) {
     }
 
     // update clusters with license check results
-    const getSupportedClusters = flagSupportedClusters(req);
+    const getSupportedClusters = flagSupportedClusters(req, kbnIndexPattern);
     clusters = await getSupportedClusters(clusters);
 
     // add alerts data
-    const clustersAlerts = await alertsClustersAggregation(req, clusters, checkLicenseForAlerts);
+    const clustersAlerts = await alertsClustersAggregation(req, alertsIndex, clusters, checkLicenseForAlerts);
     clusters.forEach((cluster) => {
-      const clusterAlerts = {
+      cluster.alerts = {
         alertsMeta: {
           enabled: clustersAlerts.alertsMeta.enabled,
           message: clustersAlerts.alertsMeta.message // NOTE: this is only defined when the alert feature is disabled
         },
         ...clustersAlerts[cluster.cluster_uuid]
       };
-      set(cluster, 'alerts', clusterAlerts);
     });
   }
 
   // add kibana data
-  const kibanas = await getKibanasForClusters(req, kibanaIndexPattern, clusters);
+  const kibanas = await getKibanasForClusters(req, kbnIndexPattern, clusters);
   // add the kibana data to each cluster
   kibanas.forEach(kibana => {
     const clusterIndex = findIndex(clusters, { cluster_uuid: kibana.clusterUuid });
@@ -97,11 +96,18 @@ export async function getClustersFromRequest(req) {
   });
 
   // add logstash data
-  const logstashes = await getLogstashForClusters(req, logstashIndexPattern, clusters);
+  const logstashes = await getLogstashForClusters(req, lsIndexPattern, clusters);
   // add the logstash data to each cluster
   logstashes.forEach(logstash => {
     const clusterIndex = findIndex(clusters, { cluster_uuid: logstash.clusterUuid });
     set(clusters[clusterIndex], 'logstash', logstash.stats);
+  });
+
+  // add beats data
+  const beatsByCluster = await getBeatsForClusters(req, beatsIndexPattern, clusters);
+  beatsByCluster.forEach(beats => {
+    const clusterIndex = findIndex(clusters, { cluster_uuid: beats.clusterUuid });
+    set(clusters[clusterIndex], 'beats', beats.stats);
   });
 
   return normalizeClustersData(clusters);

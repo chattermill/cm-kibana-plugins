@@ -1,6 +1,7 @@
 import { debounce, isEqual } from 'lodash';
 import { uiModules } from 'ui/modules';
 import { InitAfterBindingsWorkaround } from 'ui/compat';
+import 'ui/dirty_prompt';
 import template from './threshold_watch_edit.html';
 import './threshold_watch_edit.less';
 import '../watch_edit_title_panel';
@@ -14,6 +15,7 @@ import 'plugins/watcher/services/license';
 import 'plugins/watcher/services/timezone';
 import 'plugins/watcher/services/watch';
 import 'plugins/watcher/services/interval';
+import 'plugins/watcher/services/action_defaults';
 
 import dateMath from '@elastic/datemath';
 import { Notifier } from 'ui/notify/notifier';
@@ -28,9 +30,10 @@ app.directive('thresholdWatchEdit', function ($injector) {
   const timezoneService = $injector.get('xpackWatcherTimezoneService');
   const licenseService = $injector.get('xpackWatcherLicenseService');
   const intervalService = $injector.get('xpackWatcherIntervalService');
+  const actionDefaultsService = $injector.get('xpackWatcherActionDefaultsService');
   const kbnUrl = $injector.get('kbnUrl');
   const confirmModal = $injector.get('confirmModal');
-  const dirtyPrompt = $injector.get('xpackWatcherDirtyPrompt');
+  const dirtyPrompt = $injector.get('dirtyPrompt');
   const $interval = $injector.get('$interval');
 
   return {
@@ -115,8 +118,9 @@ app.directive('thresholdWatchEdit', function ($injector) {
         this.actionsPanelValid = false;
       }
 
-      onActionAdd = (type) => {
-        this.watch.createAction(type);
+      onActionAdd = (actionType) => {
+        const defaults = actionDefaultsService.getDefaults(this.watch.type, actionType);
+        this.watch.createAction(actionType, defaults);
       }
 
       onActionDelete = (action) => {
@@ -180,16 +184,16 @@ app.directive('thresholdWatchEdit', function ($injector) {
         });
 
         return watchService.visualizeWatch(this.watch, visualizeOptions)
-        .then(({ visualizeData }) => {
-          this.visualizeData = visualizeData;
-          this.visualizeDataPageCount = Object.keys(visualizeData).length;
-          this.setVisualizationPageByKey(this.visualizeDataKey);
-          this.restartRefreshWatchVisualizationTimer();
-        })
-        .catch(e => {
-          this.notifier.error(e);
-          this.stopRefreshWatchVisualizationTimer();
-        });
+          .then(({ visualizeData }) => {
+            this.visualizeData = visualizeData;
+            this.visualizeDataPageCount = Object.keys(visualizeData).length;
+            this.setVisualizationPageByKey(this.visualizeDataKey);
+            this.restartRefreshWatchVisualizationTimer();
+          })
+          .catch(e => {
+            this.notifier.error(e);
+            this.stopRefreshWatchVisualizationTimer();
+          });
       }, 500);
 
       setVisualizationPageByKey = (key) => {
@@ -246,50 +250,50 @@ app.directive('thresholdWatchEdit', function ($injector) {
         }
 
         return this.isExistingWatch()
-        .then(existingWatch => {
-          if (!existingWatch) {
-            return this.saveWatch();
-          }
+          .then(existingWatch => {
+            if (!existingWatch) {
+              return this.saveWatch();
+            }
 
-          const confirmModalOptions = {
-            onConfirm: this.saveWatch,
-            confirmButtonText: 'Overwrite Watch'
-          };
+            const confirmModalOptions = {
+              onConfirm: this.saveWatch,
+              confirmButtonText: 'Overwrite Watch'
+            };
 
-          const watchNameMessageFragment = existingWatch.name ? ` (name: "${existingWatch.name}")` : '';
-          const message = `Watch with ID "${this.watch.id}"${watchNameMessageFragment} already exists. Do you want to overwrite it?`;
-          return confirmModal(message, confirmModalOptions);
-        })
-        .catch(err => this.notifier.error(err));
+            const watchNameMessageFragment = existingWatch.name ? ` (name: "${existingWatch.name}")` : '';
+            const message = `Watch with ID "${this.watch.id}"${watchNameMessageFragment} already exists. Do you want to overwrite it?`;
+            return confirmModal(message, confirmModalOptions);
+          })
+          .catch(err => this.notifier.error(err));
       }
 
       isExistingWatch = () => {
         return watchService.loadWatch(this.watch.id)
-        .then(existingWatch => {
-          return existingWatch;
-        })
-        .catch(err => {
-          return licenseService.checkValidity()
-          .then(() => {
-            if (err.status === 404) {
-              return false;
-            }
-            throw err;
+          .then(existingWatch => {
+            return existingWatch;
+          })
+          .catch(err => {
+            return licenseService.checkValidity()
+              .then(() => {
+                if (err.status === 404) {
+                  return false;
+                }
+                throw err;
+              });
           });
-        });
       }
 
       saveWatch = () => {
         return watchService.saveWatch(this.watch)
-        .then(() => {
-          this.watch.isNew = false; // without this, the message displays 'New Watch'
-          this.notifier.info(`Saved Watch "${this.watch.displayName}"`);
-          this.onClose();
-        })
-        .catch(err => {
-          return licenseService.checkValidity()
-          .then(() => this.notifier.error(err));
-        });
+          .then(() => {
+            this.watch.isNew = false; // without this, the message displays 'New Watch'
+            this.notifier.info(`Saved Watch "${this.watch.displayName}"`);
+            this.onClose();
+          })
+          .catch(err => {
+            return licenseService.checkValidity()
+              .then(() => this.notifier.error(err));
+          });
       }
     }
   };

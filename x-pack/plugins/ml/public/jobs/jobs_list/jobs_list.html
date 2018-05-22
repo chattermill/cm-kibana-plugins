@@ -11,13 +11,13 @@
     <div>
       <header>
         <div class="row" >
-        <div class="col-xs-10">
-          <div ng-class="privileges.canCreateJob ? 'button-wrapper' : ['button-wrapper', 'disabled']" data-placement="right" data-toggle="tooltip"
-            ng-attr-tooltip="{{privileges.canCreateJob === false ? 'You do not have permission to create Machine Learning jobs. Please contact your administrator.' : undefined}}">
+        <div class="col-xs-6 col-md-9">
+          <div ng-class="(privileges.canCreateJob===false || licenseDetails.hasExpired===true) ? ['button-wrapper', 'disabled'] : 'button-wrapper'" data-placement="right" data-toggle="tooltip"
+            ng-attr-tooltip="{{(privileges.canCreateJob===false || licenseDetails.hasExpired===true) ? createPermissionFailureMessage('canCreateJob') : undefined}}">
             <button
               ng-click='newJob()'
               class="kuiButton kuiButton--primary"
-              ng-disabled='!privileges.canCreateJob'
+              ng-disabled='(privileges.canCreateJob===false || licenseDetails.hasExpired===true)'
               aria-label="Create new job">
               <i aria-hidden="true" class="fa fa-plus"></i>
               Create new job
@@ -27,25 +27,13 @@
         </div>
 
 
-        <div class="col-xs-2" >
-          <input
-            ng-model="filterText"
+        <div class="col-xs-6 col-md-3">
+          <ml-form-filter-input
             placeholder="Job filter"
-            ng-change="applyFilter()"
-            class="form-control job-filter-input"
-             />
-          <div class="job-filter-progress-icon" >
-            <div class="filter-icon" ng-show="filterIcon===1">
-              <i class='fa fa-spinner fa-spin'></i>
-            </div>
-            <div class="filter-icon" ng-show="filterIcon===0">
-              <a aria-label="Clear filter" ng-click="clearFilter()">
-                <i class="fa fa-times-circle"></i>
-              </a>
-            </div>
-          </div>
-
-
+            filter="filterText"
+            filter-icon="filterIcon"
+            filter-changed="applyFilter"
+            clear-filter="clearFilter" />
         </div>
       </div>
 
@@ -58,10 +46,11 @@
 
       <div class="no-jobs-warning" ng-show="filterText && table.rows.length===0">No jobs found</div>
       <div class="no-jobs-warning" ng-show="noJobsCreated===true">No jobs configured</div>
-      <div class="no-jobs-warning" ng-show="noJobsCreated===undefined">
-        <div class="loading-jobs"><i class='fa fa-spinner fa-spin'></i></div>
-        <div>Loading Jobs</div>
-      </div>
+      <ml-loading-indicator
+        label="Loading jobs"
+        is-loading="noJobsCreated===undefined"
+        class="no-jobs-warning"
+      />
 
     </div>
   </div>

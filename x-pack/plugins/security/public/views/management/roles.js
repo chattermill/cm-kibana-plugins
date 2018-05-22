@@ -19,8 +19,8 @@ routes.when(ROLES_PATH, {
     roles(ShieldRole, kbnUrl, Promise, Private) {
       // $promise is used here because the result is an ngResource, not a promise itself
       return ShieldRole.query().$promise
-      .catch(checkLicenseError(kbnUrl, Promise, Private))
-      .catch(_.identity); // Return the error if there is one
+        .catch(checkLicenseError(kbnUrl, Promise, Private))
+        .catch(_.identity); // Return the error if there is one
     }
   },
   controller($scope, $route, $q, Notifier, confirmModal) {
@@ -53,6 +53,15 @@ routes.when(ROLES_PATH, {
         Are you sure you want to delete the selected role(s)? This action is irreversible!`,
         confirmModalOptions
       );
+    };
+
+    $scope.getSortArrowClass = field => {
+      if ($scope.sort.orderBy === field) {
+        return $scope.sort.reverse ? 'fa-long-arrow-down' : 'fa-long-arrow-up';
+      }
+
+      // Sort ascending by default.
+      return 'fa-long-arrow-up';
     };
 
     $scope.toggleAll = () => {

@@ -1,5 +1,5 @@
 import { getSearchValue } from 'plugins/watcher/lib/get_search_value';
-import { get, isEqual, remove, map } from 'lodash';
+import { get, isEqual, remove, map, merge } from 'lodash';
 import { Action } from '../action';
 import { WatchStatus } from '../watch_status';
 import { createActionId } from './lib/create_action_id';
@@ -23,17 +23,17 @@ export class BaseWatch {
 
     this.name = get(props, 'name', '');
     this.isSystemWatch = Boolean(get(props, 'isSystemWatch'));
-    this.watchStatus = WatchStatus.fromUpstreamJSON(get(props, 'watchStatus'));
+    this.watchStatus = WatchStatus.fromUpstreamJson(get(props, 'watchStatus'));
 
     const actions = get(props, 'actions', []);
-    this.actions = actions.map(Action.fromUpstreamJSON);
+    this.actions = actions.map(Action.fromUpstreamJson);
   }
 
   updateWatchStatus = watchStatus => {
     this.watchStatus = watchStatus;
   }
 
-  createAction = (type) => {
+  createAction = (type, defaults) => {
     const ActionTypes = Action.getActionTypes();
     const ActionType = ActionTypes[type];
 
@@ -42,7 +42,13 @@ export class BaseWatch {
     }
 
     const id = createActionId(this.actions, type);
-    const action = new ActionType({ id, type });
+    const props = merge(
+      {},
+      defaults,
+      { id, type }
+    );
+
+    const action = new ActionType(props);
     this.addAction(action);
   }
 
@@ -88,12 +94,12 @@ export class BaseWatch {
     return this.constructor.selectSortOrder;
   }
 
-  get upstreamJSON() {
+  get upstreamJson() {
     return {
       id: this.id,
       name: this.name,
       type: this.type,
-      actions: map(this.actions, action => action.upstreamJSON)
+      actions: map(this.actions, action => action.upstreamJson)
     };
   }
 
@@ -115,4 +121,4 @@ export class BaseWatch {
   static selectMessage = 'Set up a new watch.';
   static isCreatable = true;
   static selectSortOrder = 0;
-};
+}

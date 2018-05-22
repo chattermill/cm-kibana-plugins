@@ -1,4 +1,5 @@
 import { get, map, forEach, max } from 'lodash';
+import { badRequest } from 'boom';
 import { getMoment } from '../../../common/lib/get_moment';
 import { ActionStatus } from '../action_status';
 import { ACTION_STATES, WATCH_STATES, WATCH_STATE_COMMENTS } from '../../../common/constants';
@@ -31,7 +32,7 @@ export class WatchStatus {
     const actionStatusesJson = get(this.watchStatusJson, 'actions', {});
     this.actionStatuses = map(actionStatusesJson, (actionStatusJson, id) => {
       const json = { id, actionStatusJson };
-      return ActionStatus.fromUpstreamJSON(json);
+      return ActionStatus.fromUpstreamJson(json);
     });
   }
 
@@ -104,7 +105,7 @@ export class WatchStatus {
   }
 
   // generate object to send to kibana
-  get downstreamJSON() {
+  get downstreamJson() {
     const json = {
       id: this.id,
       state: this.state,
@@ -113,19 +114,19 @@ export class WatchStatus {
       lastChecked: this.lastChecked,
       lastMetCondition: this.lastMetCondition,
       lastFired: this.lastFired,
-      actionStatuses: map(this.actionStatuses, actionStatus => actionStatus.downstreamJSON)
+      actionStatuses: map(this.actionStatuses, actionStatus => actionStatus.downstreamJson)
     };
 
     return json;
   }
 
   // generate object from elasticsearch response
-  static fromUpstreamJSON(json) {
+  static fromUpstreamJson(json) {
     if (!json.id) {
-      throw new Error('json argument must contain an id property');
+      throw badRequest('json argument must contain an id property');
     }
     if (!json.watchStatusJson) {
-      throw new Error('json argument must contain a watchStatusJson property');
+      throw badRequest('json argument must contain a watchStatusJson property');
     }
 
     return new WatchStatus(json);
@@ -160,4 +161,4 @@ export class WatchStatus {
   }
   */
 
-};
+}

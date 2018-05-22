@@ -20,6 +20,8 @@ import moment from 'moment';
 import { parseInterval } from 'ui/utils/parse_interval';
 
 import { labelDuplicateDetectorDescriptions } from 'plugins/ml/util/anomaly_utils';
+import { isWebUrl } from 'plugins/ml/util/string_utils';
+import { ML_DATA_PREVIEW_COUNT } from 'plugins/ml/../common/util/job_utils';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
@@ -71,17 +73,18 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
     return {
       job_id: '',
       description: '',
+      groups: [],
       analysis_config: {
         bucket_span: '15m',
-        influencers:[],
-        detectors :[]
+        influencers: [],
+        detectors: []
       },
-      data_description : {
-        time_field:      '',
-        time_format:     '', // 'epoch',
+      data_description: {
+        time_field: '',
+        time_format: '', // 'epoch',
         field_delimiter: '',
         quote_character: '"',
-        format:         'delimited'
+        format: 'delimited'
       }
     };
   };
@@ -93,8 +96,6 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
 
     ml.jobs()
       .then((resp) => {
-        console.log('loadJobs query response:', resp);
-
         // make deep copy of jobs
         angular.copy(resp.jobs, jobs);
 
@@ -126,22 +127,22 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
               }
             }
             this.loadDatafeeds()
-            .then((datafeedsResp) => {
-              for (let i = 0; i < jobs.length; i++) {
-                for (let j = 0; j < datafeedsResp.datafeeds.length; j++) {
-                  if (jobs[i].job_id === datafeedsResp.datafeeds[j].job_id) {
-                    jobs[i].datafeed_config = datafeedsResp.datafeeds[j];
+              .then((datafeedsResp) => {
+                for (let i = 0; i < jobs.length; i++) {
+                  for (let j = 0; j < datafeedsResp.datafeeds.length; j++) {
+                    if (jobs[i].job_id === datafeedsResp.datafeeds[j].job_id) {
+                      jobs[i].datafeed_config = datafeedsResp.datafeeds[j];
 
-                    datafeedIds[jobs[i].job_id] = datafeedsResp.datafeeds[j].datafeed_id;
+                      datafeedIds[jobs[i].job_id] = datafeedsResp.datafeeds[j].datafeed_id;
+                    }
                   }
                 }
-              }
-              processBasicJobInfo(this, jobs);
-              this.jobs = jobs;
-              createJobStats(this.jobs, this.jobStats);
-              createJobUrls(this.jobs, this.jobUrls);
-              deferred.resolve({ jobs: this.jobs });
-            });
+                processBasicJobInfo(this, jobs);
+                this.jobs = jobs;
+                createJobStats(this.jobs, this.jobStats);
+                createJobUrls(this.jobs, this.jobUrls);
+                deferred.resolve({ jobs: this.jobs });
+              });
           })
           .catch((err) => {
             error(err);
@@ -200,21 +201,21 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
               const datafeedId = this.getDatafeedId(jobId);
 
               this.loadDatafeeds(datafeedId)
-              .then((datafeedsResp) => {
-                for (let i = 0; i < jobs.length; i++) {
-                  for (let j = 0; j < datafeedsResp.datafeeds.length; j++) {
-                    if (jobs[i].job_id === datafeedsResp.datafeeds[j].job_id) {
-                      jobs[i].datafeed_config = datafeedsResp.datafeeds[j];
+                .then((datafeedsResp) => {
+                  for (let i = 0; i < jobs.length; i++) {
+                    for (let j = 0; j < datafeedsResp.datafeeds.length; j++) {
+                      if (jobs[i].job_id === datafeedsResp.datafeeds[j].job_id) {
+                        jobs[i].datafeed_config = datafeedsResp.datafeeds[j];
 
-                      datafeedIds[jobs[i].job_id] = datafeedsResp.datafeeds[j].datafeed_id;
+                        datafeedIds[jobs[i].job_id] = datafeedsResp.datafeeds[j].datafeed_id;
+                      }
                     }
                   }
-                }
-                this.jobs = jobs;
-                createJobStats(this.jobs, this.jobStats);
-                createJobUrls(this.jobs, this.jobUrls);
-                deferred.resolve({ jobs: this.jobs });
-              });
+                  this.jobs = jobs;
+                  createJobStats(this.jobs, this.jobStats);
+                  createJobUrls(this.jobs, this.jobUrls);
+                  deferred.resolve({ jobs: this.jobs });
+                });
             })
             .catch((err) => {
               error(err);
@@ -308,23 +309,23 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
           const datafeedId = this.getDatafeedId(jobId);
 
           this.loadDatafeeds(datafeedId)
-          .then((datafeedsResp) => {
-            for (let i = 0; i < jobs.length; i++) {
-              for (let j = 0; j < datafeedsResp.datafeeds.length; j++) {
-                if (jobs[i].job_id === datafeedsResp.datafeeds[j].job_id) {
-                  jobs[i].datafeed_config = datafeedsResp.datafeeds[j];
+            .then((datafeedsResp) => {
+              for (let i = 0; i < jobs.length; i++) {
+                for (let j = 0; j < datafeedsResp.datafeeds.length; j++) {
+                  if (jobs[i].job_id === datafeedsResp.datafeeds[j].job_id) {
+                    jobs[i].datafeed_config = datafeedsResp.datafeeds[j];
 
-                  datafeedIds[jobs[i].job_id] = datafeedsResp.datafeeds[j].datafeed_id;
+                    datafeedIds[jobs[i].job_id] = datafeedsResp.datafeeds[j].datafeed_id;
+                  }
                 }
               }
-            }
-            createJobStats(this.jobs, this.jobStats);
-            createJobUrls(this.jobs, this.jobUrls);
-            deferred.resolve({ jobs: this.jobs });
-          })
-          .catch((err) => {
-            error(err);
-          });
+              createJobStats(this.jobs, this.jobStats);
+              createJobUrls(this.jobs, this.jobUrls);
+              deferred.resolve({ jobs: this.jobs });
+            })
+            .catch((err) => {
+              error(err);
+            });
         } else {
           deferred.resolve({ jobs: this.jobs });
         }
@@ -410,9 +411,9 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
             this.loadJobs().then(() => {
               deferred.resolve({ jobs: this.jobs, listChanged: true });
             })
-            .catch((err) => {
-              error(err);
-            });
+              .catch((err) => {
+                error(err);
+              });
           } else {
             createJobStats(this.jobs, this.jobStats);
             createJobUrls(this.jobs, this.jobUrls);
@@ -423,9 +424,9 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
           error(err);
         });
     })
-    .catch((err) => {
-      error(err);
-    });
+      .catch((err) => {
+        error(err);
+      });
 
     function error(err) {
       console.log('updateAllJobStats error getting list job details:', err);
@@ -453,18 +454,18 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
     const datafeedId = this.getDatafeedId(jobId);
 
     ml.datafeedStats({ datafeedId })
-    .then((resp) => {
+      .then((resp) => {
       // console.log('updateSingleJobCounts controller query response:', resp);
-      const datafeeds = resp.datafeeds;
-      let state = 'UNKNOWN';
-      if (datafeeds && datafeeds.length) {
-        state = datafeeds[0].state;
-      }
-      deferred.resolve(state);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+        const datafeeds = resp.datafeeds;
+        let state = 'UNKNOWN';
+        if (datafeeds && datafeeds.length) {
+          state = datafeeds[0].state;
+        }
+        deferred.resolve(state);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
 
     return deferred.promise;
   };
@@ -492,29 +493,29 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       const datafeedId = this.getDatafeedId(job.job_id);
       // stop datafeed
       ml.forceDeleteDatafeed({ datafeedId: datafeedId })
-      .then(() => {
-        status.deleteDatafeed = 1;
-        deleteJob();
-      })
-      .catch((resp) => {
-        status.deleteDatafeed = -1;
-        status.deleteJob = -1;
-        deleteFailed(resp, 'Delete datafeed');
-      });
+        .then(() => {
+          status.deleteDatafeed = 1;
+          deleteJob();
+        })
+        .catch((resp) => {
+          status.deleteDatafeed = -1;
+          status.deleteJob = -1;
+          deleteFailed(resp, 'Delete datafeed');
+        });
     } else {
       deleteJob();
     }
 
     function deleteJob() {
       ml.forceDeleteJob({ jobId: job.job_id })
-      .then(() => {
-        status.deleteJob = 1;
-        deferred.resolve({ success: true });
-      })
-      .catch((resp) => {
-        status.deleteJob = -1;
-        deleteFailed(resp, 'Delete job');
-      });
+        .then(() => {
+          status.deleteJob = 1;
+          deferred.resolve({ success: true });
+        })
+        .catch((resp) => {
+          status.deleteJob = -1;
+          deleteFailed(resp, 'Delete job');
+        });
     }
 
     function deleteFailed(resp, txt) {
@@ -546,6 +547,8 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
     delete tempJob.average_bucket_processing_time_ms;
     delete tempJob.model_snapshot_id;
     delete tempJob.open_time;
+    delete tempJob.established_model_memory;
+    delete tempJob.calendars;
 
     delete tempJob.data_description.time_format;
     delete tempJob.data_description.format;
@@ -561,8 +564,20 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       delete tempJob.datafeed_config.datafeed_id;
       delete tempJob.datafeed_config.job_id;
       delete tempJob.datafeed_config.state;
-      delete tempJob.datafeed_config.frequency;
       delete tempJob.datafeed_config.node;
+
+      // remove query_delay if it's between 60s and 120s
+      // the back-end produces a random value between 60 and 120 and so
+      // by deleting it, the back-end will produce a new random value
+      if (tempJob.datafeed_config.query_delay) {
+        const interval = parseInterval(tempJob.datafeed_config.query_delay);
+        if (interval !== null) {
+          const queryDelay = interval.asSeconds();
+          if (queryDelay > 60 && queryDelay < 120) {
+            delete tempJob.datafeed_config.query_delay;
+          }
+        }
+      }
     }
 
     return tempJob;
@@ -626,7 +641,7 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
   // unique fields across all jobs.
   this.getJobViewByFields = function () {
     const deferred = $q.defer();
-    const obj = { success: true, fieldsByJob: { '*':[] } };
+    const obj = { success: true, fieldsByJob: { '*': [] } };
 
     ml.jobs()
       .then(function (resp) {
@@ -687,32 +702,25 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       size: 1,
       _source: field,
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0 && resp.hits.hits.length) {
-        const hit = resp.hits.hits[0];
-        if (hit._source && hit._source[field]) {
-          obj.time = hit._source[field];
+      .then((resp) => {
+        if (resp.hits.total !== 0 && resp.hits.hits.length) {
+          const hit = resp.hits.hits[0];
+          if (hit._source && hit._source[field]) {
+            obj.time = hit._source[field];
+          }
         }
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
-  this.searchPreview = function (indices, types, job) {
+  this.searchPreview = function (job) {
     const deferred = $q.defer();
 
     if (job.datafeed_config) {
-      const data = {
-        index:indices,
-        // removed for now because it looks like kibana are now escaping the & and it breaks
-        // it was done this way in the first place because you can't sent <index>/<type>/_search through
-        // kibana's proxy. it doesn't like type
-        // '&type': types.join(',')
-      };
       const body = {};
 
       let query = { 'match_all': {} };
@@ -736,7 +744,7 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
 
       } else {
         // if aggregations is not set and retrieveWholeSource is not set, add all of the fields from the job
-        body.size = 10;
+        body.size = ML_DATA_PREVIEW_COUNT;
 
         // add script_fields if present
         const scriptFields = job.datafeed_config.script_fields;
@@ -794,15 +802,18 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
         }
       }
 
-      data.body = body;
+      const data = {
+        index: job.datafeed_config.indices,
+        body
+      };
 
       es.search(data)
-      .then((resp) => {
-        deferred.resolve(resp);
-      })
-      .catch((resp) => {
-        deferred.reject(resp);
-      });
+        .then((resp) => {
+          deferred.resolve(resp);
+        })
+        .catch((resp) => {
+          deferred.reject(resp);
+        });
     }
 
     return deferred.promise;
@@ -814,6 +825,10 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
 
   this.closeJob = function (jobId) {
     return ml.closeJob({ jobId });
+  };
+
+  this.forceCloseJob = function (jobId) {
+    return ml.forceCloseJob({ jobId });
   };
 
 
@@ -829,14 +844,14 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
 
   this.updateDatafeed = function (datafeedId, datafeedConfig) {
     return ml.updateDatafeed({ datafeedId, datafeedConfig })
-    .then((resp) => {
-      console.log('update datafeed', resp);
-      return { success: true };
-    }).catch((err) => {
-      msgs.error('Could not update datafeed: ' + datafeedId);
-      console.log('update datafeed', err);
-      return { success: false, message: err.message };
-    });
+      .then((resp) => {
+        console.log('update datafeed', resp);
+        return { success: true };
+      }).catch((err) => {
+        msgs.error('Could not update datafeed: ' + datafeedId);
+        console.log('update datafeed', err);
+        return { success: false, message: err.message };
+      });
   };
 
   this.deleteDatafeed = function () {
@@ -850,7 +865,7 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
 
     // if the end timestamp is a number, add one ms to it to make it
     // inclusive of the end of the data
-    if (_.isNumeric(end)) {
+    if (_.isNumber(end)) {
       end++;
     }
 
@@ -859,14 +874,14 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       start,
       end
     })
-    .then((resp) => {
-      deferred.resolve(resp);
+      .then((resp) => {
+        deferred.resolve(resp);
 
-    }).catch((err) => {
-      console.log('MlJobsList error starting datafeed:', err);
-      msgs.error('Could not start datafeed for ' + jobId, err);
-      deferred.reject(err);
-    });
+      }).catch((err) => {
+        console.log('MlJobsList error starting datafeed:', err);
+        msgs.error('Could not start datafeed for ' + jobId, err);
+        deferred.reject(err);
+      });
     return deferred.promise;
   };
 
@@ -881,7 +896,7 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
         deferred.resolve(resp);
 
       }).catch((err) => {
-        console.log('MlJobsList error stoping datafeed:', err);
+        console.log('MlJobsList error stopping datafeed:', err);
         if (err.statusCode === 500) {
           msgs.error('Could not stop datafeed for ' + jobId);
           msgs.error('Request may have timed out and may still be running in the background.');
@@ -988,7 +1003,7 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       const bucketSpan = parseInterval(analysisConfig.bucket_span);
 
       const job = {
-        id:jobObj.job_id,
+        id: jobObj.job_id,
         bucketSpanSeconds: bucketSpan.asSeconds()
       };
 
@@ -1013,7 +1028,8 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       if (_.has(jobObj, 'custom_settings.custom_urls')) {
         job.customUrls = [];
         _.each(jobObj.custom_settings.custom_urls, (url) => {
-          if (_.has(url, 'url_name') && _.has(url, 'url_value')) {
+          if (_.has(url, 'url_name') && _.has(url, 'url_value') && isWebUrl(url.url_value)) {
+            // Only make web URLs (i.e. http or https) available in dashboard drilldowns.
             job.customUrls.push(url);
           }
         });
@@ -1066,7 +1082,7 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
         failedJobs++;
       }
 
-      if (job.datafeed_config.state === 'started') {
+      if (job.datafeed_config && job.datafeed_config.state === 'started') {
         jobStats.activeDatafeeds.value++;
       }
 
@@ -1106,5 +1122,26 @@ module.service('mlJobService', function ($rootScope, $http, $q, es, ml, mlMessag
       }
     });
   }
+
+  // get the list of job group ids as well as how many jobs are in each group
+  this.getJobGroups = function () {
+    const groups = [];
+    const tempGroups = {};
+    this.jobs.forEach(job => {
+      if (Array.isArray(job.groups)) {
+        job.groups.forEach(group => {
+          if (tempGroups[group] === undefined) {
+            tempGroups[group] = [job];
+          } else {
+            tempGroups[group].push(job);
+          }
+        });
+      }
+    });
+    _.each(tempGroups, (js, id) => {
+      groups.push({ id, jobs: js });
+    });
+    return groups;
+  };
 
 });

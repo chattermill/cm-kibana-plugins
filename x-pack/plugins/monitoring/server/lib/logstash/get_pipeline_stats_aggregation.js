@@ -1,5 +1,5 @@
 import { createQuery } from '../create_query';
-import { ElasticsearchMetric } from '../metrics/metric_classes';
+import { ElasticsearchMetric } from '../metrics';
 
 function scalarCounterAggregation(field, fieldPath, ephemeralIdField, maxBucketSize) {
   const fullPath = `${fieldPath}.${field}`;
@@ -72,16 +72,25 @@ function outerAggs(pipelineId, pipelineHash, maxBucketSize) {
         field: 'logstash_stats.pipelines.events.duration_in_millis'
       }
     },
+    timebounds: {
+      reverse_nested: {},
+      aggs: {
+        first_seen: {
+          min: {
+            field: 'logstash_stats.timestamp'
+          }
+        },
+        last_seen: {
+          max: {
+            field: 'logstash_stats.timestamp'
+          }
+        }
+      }
+    },
     vertices: nestedVertices(maxBucketSize)
   };
 
-  const aggs = {
-    nodes_count: {
-      cardinality: {
-        field: 'logstash_stats.logstash.uuid',
-        precision_threshold: 10000
-      }
-    },
+  return {
     pipelines: {
       nested: { path: 'logstash_stats.pipelines' },
       aggs: {
@@ -99,18 +108,10 @@ function outerAggs(pipelineId, pipelineHash, maxBucketSize) {
       }
     }
   };
-
-  const fieldPath = 'logstash_stats.events';
-  const ephemeralIdField = 'logstash_stats.logstash.ephemeral_id';
-
-  return {
-    ...aggs,
-    ...scalarCounterAggregation('in', fieldPath, ephemeralIdField, maxBucketSize),
-    ...scalarCounterAggregation('out', fieldPath, ephemeralIdField, maxBucketSize)
-  };
 }
 
-export async function getPipelineStatsAggregation(callWithRequest, req, logstashIndexPattern, start, end, pipelineId, pipelineHash) {
+export async function getPipelineStatsAggregation(callWithRequest, req, logstashIndexPattern,
+  { clusterUuid, start, end, pipelineId, pipelineHash }) {
   const filters = [
     {
       nested: {
@@ -132,6 +133,7 @@ export async function getPipelineStatsAggregation(callWithRequest, req, logstash
     start,
     end,
     metric: ElasticsearchMetric.getMetricFields(),
+    clusterUuid,
     filters
   });
 

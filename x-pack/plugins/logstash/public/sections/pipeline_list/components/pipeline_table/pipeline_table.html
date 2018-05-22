@@ -1,14 +1,16 @@
 <table class="kuiTable" data-test-subj="pipelineTable">
   <thead>
     <tr>
-      <th class="kuiTableHeaderCell kuiTableHeaderCell--checkBox">
-        <check-box
-          is-selected="pipelineTable.allSelected"
-          on-select-change="pipelineTable.onAllSelectedChange"
-          data-test-subj="chkSelectAll"
-        ></check-box>
+      <th scope="col" class="kuiTableHeaderCell kuiTableHeaderCell--checkBox">
+        <div class="kuiTableHeaderCell__liner">
+          <check-box
+            is-selected="pipelineTable.allSelected"
+            on-select-change="pipelineTable.onAllSelectedChange"
+            data-test-subj="chkSelectAll"
+          ></check-box>
+        </div>
       </th>
-      <th class="kuiTableHeaderCell kuiTableHeaderCell--sortable">
+      <th scope="col" class="kuiTableHeaderCell">
         <sortable-column
           field="id"
           on-sort-change="pipelineTable.onSortChange"
@@ -18,10 +20,10 @@
           ID
         </sortable-column>
       </th>
-      <th class="kuiTableHeaderCell kuiTableHeaderCell--sortable">
+      <th scope="col" class="kuiTableHeaderCell">
         Description
       </th>
-      <th class="kuiTableHeaderCell kuiTableHeaderCell--sortable">
+      <th scope="col" class="kuiTableHeaderCell">
         <sortable-column
           field="lastModified.sortOrder"
           on-sort-change="pipelineTable.onSortChange"
@@ -32,11 +34,13 @@
         </sortable-column>
       </th>
       <th
-       class="kuiTableHeaderCell kuiTableHeaderCell--sortable"
+       scope="col"
+       class="kuiTableHeaderCell"
        ng-show="pipelineTable.isSecurityEnabled"
       >
         Last Modified By
       </th>
+      <th scope="col" class="kuiTableHeaderCell"></th>
     </tr>
   </thead>
 
@@ -84,6 +88,21 @@
       >
         <div class="kuiTableRowCell__liner" data-test-subj="cellUsername">
           {{item.pipeline.username}}
+        </div>
+      </td>
+      <td class="kuiTableRowCell">
+        <div class="kuiTableRowCell__liner">
+          <div class="kuiMenuButtonGroup kuiMenuButtonGroup--alignRight">
+            <a
+              class="kuiMenuButton kuiMenuButton--basic kuiMenuButton--iconText"
+              title="Clone"
+              ng-href="#/management/logstash/pipelines/pipeline/{{item.pipeline.id}}/edit?clone"
+              data-test-subj="lnkPipelineClone-{{ item.pipeline.id }}"
+            >
+              <span class="kuiMenuButton__icon kuiIcon fa-clone"></span>
+              <span>Clone</span>
+            </a>
+          </div>
         </div>
       </td>
     </tr>

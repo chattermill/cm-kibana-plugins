@@ -6,7 +6,7 @@ export class VisualizeOptions {
     this.timezone = props.timezone;
   }
 
-  get upstreamJSON() {
+  get upstreamJson() {
     return {
       rangeFrom: this.rangeFrom,
       rangeTo: this.rangeTo,
@@ -14,4 +14,4 @@ export class VisualizeOptions {
       timezone: this.timezone
     };
   }
-};
+}

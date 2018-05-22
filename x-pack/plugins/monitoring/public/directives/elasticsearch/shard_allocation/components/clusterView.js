@@ -19,57 +19,64 @@ import React from 'react';
 import { TableHead } from './tableHead';
 import { TableBody } from './tableBody';
 
-export const ClusterView = React.createClass({
-  displayName: 'ClusterView',
-  getInitialState: function () {
-    const scope = this.props.scope;
-    const kbnChangePath = this.props.kbnUrl.changePath;
+export class ClusterView extends React.Component {
+  static displayName = 'ClusterView';
 
-    return {
-      labels: this.props.scope.labels || [],
-      showing: this.props.scope.showing || [],
-      shardStats: this.props.shardStats,
-      showSystemIndices: this.props.showSystemIndices,
-      toggleShowSystemIndices: this.props.toggleShowSystemIndices,
+  constructor(props) {
+    super(props);
+    const scope = props.scope;
+    const kbnChangePath = props.kbnUrl.changePath;
+
+    this.state = {
+      labels: props.scope.labels || [],
+      showing: props.scope.showing || [],
+      shardStats: props.shardStats,
+      showSystemIndices: props.showSystemIndices,
+      toggleShowSystemIndices: props.toggleShowSystemIndices,
       angularChangeUrl: (url) => {
         scope.$evalAsync(() => kbnChangePath(url));
       }
     };
-  },
-  setShowing: function (data) {
+  }
+
+  setShowing = (data) => {
     if (data) {
       this.setState({ showing: data });
     }
-  },
-  setShardStats: function (stats) {
+  };
+
+  setShardStats = (stats) => {
     this.setState({ shardStats: stats });
-  },
-  componentWillMount: function () {
+  };
+
+  componentWillMount() {
     this.props.scope.$watch('showing', this.setShowing);
     this.props.scope.$watch('shardStats', this.setShardStats);
-  },
-  hasUnassigned: function () {
+  }
+
+  hasUnassigned = () => {
     return this.state.showing.length &&
       this.state.showing[0].unassigned &&
       this.state.showing[0].unassigned.length;
-  },
-  render: function () {
+  };
+
+  render() {
     return (
       <table cellPadding="0" cellSpacing="0" className="table">
         <TableHead
-          hasUnassigned={ this.hasUnassigned() }
-          scope={ this.props.scope }
-          toggleShowSystemIndices={ this.state.toggleShowSystemIndices }
-        ></TableHead>
+          hasUnassigned={this.hasUnassigned()}
+          scope={this.props.scope}
+          toggleShowSystemIndices={this.state.toggleShowSystemIndices}
+        />
         <TableBody
-          filter={ this.props.scope.filter }
-          totalCount={ this.props.scope.totalCount }
-          rows={ this.state.showing }
-          cols={ this.state.labels.length }
-          shardStats={ this.state.shardStats }
-          changeUrl={ this.state.angularChangeUrl }
-        ></TableBody>
+          filter={this.props.scope.filter}
+          totalCount={this.props.scope.totalCount}
+          rows={this.state.showing}
+          cols={this.state.labels.length}
+          shardStats={this.state.shardStats}
+          changeUrl={this.state.angularChangeUrl}
+        />
       </table>
     );
   }
-});
+}

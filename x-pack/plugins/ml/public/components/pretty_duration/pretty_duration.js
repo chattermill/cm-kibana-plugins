@@ -13,8 +13,8 @@
  * strictly prohibited.
  */
 
- // a copy of Kibana's pretty duration directive
- // adding extra zoom in / zoom out buttons to the left of the timepicker.
+// a copy of Kibana's pretty duration directive
+// adding extra zoom in / zoom out buttons to the left of the timepicker.
 
 
 import _ from 'lodash';
@@ -23,14 +23,13 @@ import moment from 'moment';
 import angular from 'angular';
 import $ from 'jquery';
 
-import 'ui/timepicker/quick_ranges';
 import 'ui/timepicker/time_units';
 import './styles/main.less';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
 
-module.directive('prettyDuration', function (config, quickRanges, timeUnits, $compile, timefilter) {
+module.directive('prettyDuration', function (config, timeUnits, $compile, timefilter) {
   return {
     restrict: 'E',
     priority: 1,
@@ -40,6 +39,7 @@ module.directive('prettyDuration', function (config, quickRanges, timeUnits, $co
       to: '='
     },
     link: function ($scope, $elem) {
+      const quickRanges = config.get('timepicker:quickRanges');
       const dateFormat = config.get('dateFormat');
 
       const lookupByRange = {};
@@ -87,7 +87,7 @@ module.directive('prettyDuration', function (config, quickRanges, timeUnits, $co
             if ($scope[time] === 'now') {
               display[time] = 'now';
             } else {
-              const tryParse = dateMath.parse($scope[time], time === 'to' ? true : false);
+              const tryParse = dateMath.parse($scope[time], { roundUp: time === 'to' });
               display[time] = moment.isMoment(tryParse) ? '~ ' + tryParse.fromNow() : $scope[time];
             }
           }
@@ -118,13 +118,13 @@ module.directive('prettyDuration', function (config, quickRanges, timeUnits, $co
       function getFromTo() {
         if (timefilter.time.mode === 'absolute') {
           return {
-            to:   moment(timefilter.time.to),
+            to: moment(timefilter.time.to),
             from: moment(timefilter.time.from)
           };
         } else {
           timefilter.time.mode = 'absolute';
           return {
-            to:   dateMath.parse(timefilter.time.to, true),
+            to: dateMath.parse(timefilter.time.to, { roundUp: true }),
             from: dateMath.parse(timefilter.time.from)
           };
         }
@@ -161,4 +161,3 @@ module.directive('prettyDuration', function (config, quickRanges, timeUnits, $co
     }
   };
 });
-

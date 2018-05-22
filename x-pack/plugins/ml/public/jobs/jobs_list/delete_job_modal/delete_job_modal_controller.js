@@ -19,10 +19,10 @@ const module = uiModules.get('apps/ml');
 module.controller('MlDeleteJobModal', function ($scope, $modalInstance, params) {
 
   $scope.ui = {
-    stage:        0,
-    status:       params.status,
-    jobId:        params.jobId,
-    isDatafeed:  params.isDatafeed
+    stage: 0,
+    status: params.status,
+    jobId: params.jobId,
+    isDatafeed: params.isDatafeed
   };
 
   $scope.delete = function () {
@@ -33,7 +33,7 @@ module.controller('MlDeleteJobModal', function ($scope, $modalInstance, params) 
   // once the job is saved and optional upload is complete.
   // close modal and return to jobs list
   $scope.close = function () {
-    $modalInstance.dismiss('cancel');
+    $modalInstance.close();
   };
 
 });

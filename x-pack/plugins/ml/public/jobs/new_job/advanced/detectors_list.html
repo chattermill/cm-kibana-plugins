@@ -8,7 +8,7 @@
           <div aria-label="Default description" style="font-style:italic;" >{{ detectorToString(detector) }}</div>
 
           <div ng-show="editMode==='EDIT'">
-            <label>Description:</label>
+            <label class="kuiFormLabel">Description:</label>
             <input
               ng-model="detector.detector_description"
               class="form-control" />
@@ -42,12 +42,13 @@
 
     <div ng-show="editMode==='NEW'">
       <button
-        aria-label="Add Detector"
+        aria-labelledby="ml_aria_description_new_job_detectors"
+        aria-describedby="ml_aria_label_new_job_add_detector"
         ng-click="openNewWindow()"
         type="button"
         class="kuiButton kuiButton--primary kuiButton--small">
-          <span class="sr-only">Add Detector</span>
-          <i aria-hidden="true" class="fa fa-plus"></i> Add Detector
+          <i aria-hidden="true" class="fa fa-plus"></i>
+          <span id="ml_aria_label_new_job_add_detector">Add Detector</span>
       </button>
     </div>
   </div>

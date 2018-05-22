@@ -13,7 +13,6 @@
  * strictly prohibited.
  */
 
-import initializationChecks from './lib/initialization_checks';
 import { resolve } from 'path';
 import Boom from 'boom';
 import { checkLicense } from './server/lib/check_license';
@@ -23,6 +22,9 @@ import { dataFeedRoutes } from './server/routes/datafeeds';
 import { indicesRoutes } from './server/routes/indices';
 import { notificationRoutes } from './server/routes/notification_settings';
 import { systemRoutes } from './server/routes/system';
+import { dataRecognizer } from './server/routes/modules';
+import { dataVisualizerRoutes } from './server/routes/data_visualizer';
+import { calendars } from './server/routes/calendars';
 
 export const ml = (kibana) => {
   return new kibana.Plugin({
@@ -50,7 +52,8 @@ export const ml = (kibana) => {
           'savedObjectTypes',
         ]
       },
-      hacks: ['plugins/ml/hacks/toggle_app_link_in_nav']
+      hacks: ['plugins/ml/hacks/toggle_app_link_in_nav'],
+      home: ['plugins/ml/register_feature']
 
     },
 
@@ -65,7 +68,7 @@ export const ml = (kibana) => {
         xpackMainPlugin.info.feature(thisPlugin.id).registerLicenseCheckResultsGenerator(checkLicense);
       });
 
-      // Add server routes and initalize the plugin here
+      // Add server routes and initialize the plugin here
       const commonRouteConfig = {
         pre: [
           function forbidApiAccess(request, reply) {
@@ -84,10 +87,10 @@ export const ml = (kibana) => {
       indicesRoutes(server, commonRouteConfig);
       notificationRoutes(server, commonRouteConfig);
       systemRoutes(server, commonRouteConfig);
-
-      initializationChecks(this, server).start();
+      dataRecognizer(server, commonRouteConfig);
+      dataVisualizerRoutes(server, commonRouteConfig);
+      calendars(server, commonRouteConfig);
     }
-
 
   });
 };

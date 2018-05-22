@@ -1,9 +1,11 @@
 import boom from 'boom';
 import { get } from 'lodash';
+import { checkParam } from '../error_missing_required';
 import { getPipelineStateDocument } from './get_pipeline_state_document';
 import { getPipelineStatsAggregation } from './get_pipeline_stats_aggregation';
+import { getPipelineVersions } from './get_pipeline_versions';
 
-export function _vertexStats(vertex, vertexStatsBucket, totalProcessorsDurationInMillis, timePickerDurationMillis) {
+export function _vertexStats(vertex, vertexStatsBucket, totalProcessorsDurationInMillis, timeboundsInMillis) {
 
   const isInput = vertex.plugin_type === 'input';
   const isProcessor = vertex.plugin_type === 'filter' || vertex.plugin_type === 'output';
@@ -30,17 +32,20 @@ export function _vertexStats(vertex, vertexStatsBucket, totalProcessorsDurationI
     events_in: eventsInTotal,
     events_out: eventsOutTotal,
     duration_in_millis: durationInMillis,
-    events_per_millisecond: eventsTotal / timePickerDurationMillis,
+    events_per_millisecond: eventsTotal / timeboundsInMillis,
     millis_per_event: durationInMillis / eventsTotal,
     ...inputStats,
     ...processorStats
   };
 }
 
-export function _enrichStateWithStatsAggregation(stateDocument, statsAggregation, timePickerDurationMillis) {
+export function _enrichStateWithStatsAggregation(stateDocument, statsAggregation) {
   const vertexStatsByIdBuckets = statsAggregation.aggregations.pipelines.scoped.vertices.vertex_id.buckets;
   const logstashState = stateDocument.logstash_state;
   const vertices = logstashState.pipeline.representation.graph.vertices;
+
+  const timebounds = statsAggregation.aggregations.pipelines.scoped.timebounds;
+  const timeboundsInMillis = timebounds.last_seen.value - timebounds.first_seen.value;
 
   const rootAgg = statsAggregation.aggregations;
   const scopedAgg = rootAgg.pipelines.scoped;
@@ -48,10 +53,6 @@ export function _enrichStateWithStatsAggregation(stateDocument, statsAggregation
   const durationStats = scopedAgg.events_duration;
   const totalProcessorsDurationInMillis = durationStats.max - durationStats.min;
   durationStats.duration = totalProcessorsDurationInMillis;
-
-  logstashState.nodes_count = rootAgg.nodes_count.value;
-  logstashState.events_in = rootAgg.in_total.value;
-  logstashState.events_out = rootAgg.out_total.value;
 
   const verticesById = {};
   vertices.forEach(vertex => {
@@ -63,31 +64,40 @@ export function _enrichStateWithStatsAggregation(stateDocument, statsAggregation
     const vertex = verticesById[id];
 
     if (vertex !== undefined) {
-      vertex.stats = _vertexStats(vertex, vertexStatsBucket, totalProcessorsDurationInMillis, timePickerDurationMillis);
+      vertex.stats = _vertexStats(vertex, vertexStatsBucket, totalProcessorsDurationInMillis, timeboundsInMillis);
     }
   });
 
   return stateDocument.logstash_state;
 }
 
-export async function getPipeline(req, clusterUuid, pipelineId, pipelineHash, timeRange) {
-  const { callWithRequest } = req.server.plugins.elasticsearch.getCluster('monitoring');
-  const config = req.server.config();
-  const logstashIndexPattern = config.get('xpack.monitoring.logstash.index_pattern');
+export async function getPipeline(req, config, lsIndexPattern, clusterUuid, pipelineId, pipelineHash) {
+  checkParam(lsIndexPattern, 'lsIndexPattern in getPipeline');
 
-  const start = timeRange.min;
-  const end = timeRange.max;
-  const timePickerDurationMillis = end - start;
+  const { callWithRequest } = req.server.plugins.elasticsearch.getCluster('monitoring');
+  const versions = await getPipelineVersions(callWithRequest, req, config, lsIndexPattern, clusterUuid, pipelineId);
+  if (!pipelineHash) {
+    pipelineHash = versions[0].hash;
+  }
+
+  const options = {
+    clusterUuid,
+    pipelineId,
+    pipelineHash
+  };
 
   const [ stateDocument, statsAggregation ] = await Promise.all([
-    getPipelineStateDocument(callWithRequest, req, logstashIndexPattern, pipelineId, pipelineHash),
-    getPipelineStatsAggregation(callWithRequest, req, logstashIndexPattern, start, end, pipelineId, pipelineHash)
+    getPipelineStateDocument(callWithRequest, req, lsIndexPattern, options),
+    getPipelineStatsAggregation(callWithRequest, req, lsIndexPattern, options)
   ]);
 
   if (stateDocument === null) {
     return boom.notFound(`Pipeline [${pipelineId} @ ${pipelineHash}] not found in the selected time range for cluster [${clusterUuid}].`);
   }
 
-  const result = _enrichStateWithStatsAggregation(stateDocument, statsAggregation, timePickerDurationMillis);
+  const result = {
+    ..._enrichStateWithStatsAggregation(stateDocument, statsAggregation),
+    versions
+  };
   return result;
 }

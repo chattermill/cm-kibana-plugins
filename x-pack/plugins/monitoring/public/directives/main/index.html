@@ -13,6 +13,7 @@
             ng-if="crumb.url"
             kbn-href="{{ crumb.url }}"
             class="kuiLocalBreadcrumb__link"
+            data-test-subj="{{ crumb.testSubj }}"
           >
             {{ crumb.label }}
           </a>
@@ -57,6 +58,34 @@
           <a ng-if="!monitoringMain.instance" kbn-href="#/kibana" class="kuiLocalTab" ng-class="{'kuiLocalTab-isSelected': monitoringMain.isActiveTab('overview')}">Overview</a>
           <a ng-if="!monitoringMain.instance" kbn-href="#/kibana/instances" class="kuiLocalTab" ng-class="{'kuiLocalTab-isSelected': monitoringMain.isActiveTab('kibanas')}">Instances</a>
           <a ng-if="monitoringMain.instance" class="kuiLocalTab">{{ monitoringMain.instance }}</a>
+        </div>
+
+        <div ng-if="monitoringMain.inBeats" class="kuiLocalTabs" role="navigation">
+          <a
+            ng-if="!monitoringMain.instance"
+            kbn-href="#/beats"
+            class="kuiLocalTab"
+            ng-class="{'kuiLocalTab-isSelected':
+            monitoringMain.isActiveTab('overview')}"
+          >
+            Overview
+          </a>
+          <a
+            ng-if="!monitoringMain.instance"
+            kbn-href="#/beats/beats"
+            class="kuiLocalTab"
+            ng-class="{'kuiLocalTab-isSelected': monitoringMain.isActiveTab('beats')}"
+          >
+            Instances
+          </a>
+          <a
+            ng-if="monitoringMain.instance"
+            kbn-href="#/beats/beat/{{ monitoringMain.resolver }}"
+            class="kuiLocalTab"
+            ng-class="{'kuiLocalTab-isSelected': monitoringMain.page === 'overview'}"
+          >
+            Overview
+          </a>
         </div>
 
         <div ng-if="monitoringMain.inLogstash" class="kuiLocalTabs" role="navigation">
@@ -110,22 +139,32 @@
           >
             Advanced
           </a>
-          <a
-            ng-if="monitoringMain.pipelineId"
-            kbn-href="#/logstash/pipelines/{{ monitoringMain.pipelineId }}/{{ monitoringMain.pipelineHash }}"
-            class="kuiLocalTab"
-            ng-class="{'kuiLocalTab-isSelected': monitoringMain.page === 'pipeline'}"
+          <div
+            ng-if="monitoringMain.pipelineVersions"
+            class="kuiFlexGroup kuiFlexGroup--gutterMedium"
           >
-            Version {{ monitoringMain.pipelineHashShort }}
-          </a>
+            <h1 class="kuiTitle kuiFlexItem">{{ monitoringMain.pipelineId }}</h1>
+            <select
+              ng-model="monitoringMain.pipelineHash"
+              class="kuiSelect kuiFlexItem"
+              ng-change="monitoringMain.onChangePipelineHash()"
+            >
+              <option
+                ng-repeat="version in monitoringMain.pipelineVersions"
+                ng-value="version.hash"
+              >
+                Version active {{ version.relativeLastSeen }} and first seen {{ version.relativeFirstSeen }}
+              </option>
+            </select>
+          </div>
         </div>
 
         <div ng-if="monitoringMain.inOverview" class="kuiLocalTabs" role="navigation">
-          <a class="kuiLocalTab">{{ cluster.cluster_name }}</a>
+          <a class="kuiLocalTab" data-test-subj="clusterName">{{ cluster.cluster_name }}</a>
         </div>
 
         <div ng-if="monitoringMain.inAlerts" class="kuiLocalTabs" role="navigation">
-          <a class="kuiLocalTab">Cluster Alerts</a>
+          <a class="kuiLocalTab" data-test-subj="clusterAlertsListingPage">Cluster Alerts</a>
         </div>
 
         <div ng-if="monitoringMain.inListing" class="kuiLocalTabs" role="navigation">

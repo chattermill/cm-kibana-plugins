@@ -18,7 +18,7 @@
 * to extract information for display in dashboards.
 */
 
-const _ = require('lodash');
+import _ from 'lodash';
 
 // List of function descriptions for which actual values from record level results should be displayed.
 const DISPLAY_ACTUAL_FUNCTIONS = ['count', 'distinct_count', 'lat_long', 'mean', 'max', 'min', 'sum',
@@ -184,6 +184,8 @@ export const aggregationTypeTransform = {
       newAggType = 'avg';
     } else if (newAggType === 'distinct_count') {
       newAggType = 'cardinality';
+    } else if (newAggType === 'median') {
+      newAggType = 'percentiles';
     }
 
     return newAggType;
@@ -195,6 +197,8 @@ export const aggregationTypeTransform = {
       newAggType = 'mean';
     } else if (newAggType === 'cardinality') {
       newAggType = 'distinct_count';
+    } else if (newAggType === 'percentiles') {
+      newAggType = 'median';
     }
 
     return newAggType;

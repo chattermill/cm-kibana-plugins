@@ -21,7 +21,7 @@ import { ClusterView } from '../components/clusterView';
 import { uiModules } from 'ui/modules';
 
 const uiModule = uiModules.get('monitoring/directives', []);
-uiModule.directive('clusterView', function (kbnUrl) {
+uiModule.directive('clusterView', kbnUrl => {
   return {
     restrict: 'E',
     scope: {
@@ -36,11 +36,11 @@ uiModule.directive('clusterView', function (kbnUrl) {
     link: function (scope, element) {
       ReactDOM.render(
         <ClusterView
-          scope={ scope }
-          kbnUrl={ kbnUrl }
-          showSystemIndices={ scope.showSystemIndices }
-          toggleShowSystemIndices={ scope.toggleShowSystemIndices }
-        ></ClusterView>,
+          scope={scope}
+          kbnUrl={kbnUrl}
+          showSystemIndices={scope.showSystemIndices}
+          toggleShowSystemIndices={scope.toggleShowSystemIndices}
+        />,
         element[0]
       );
     }

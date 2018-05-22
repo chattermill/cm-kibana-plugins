@@ -1,7 +1,14 @@
 .edit-job-modal {
+  font-size: 14px;
   padding:20px;
   h3 {
- 		margin-top: 0px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: 10px;
+
+    i[ml-info-icon] {
+      font-size: 14px;
+    }
  	}
 
   .tab_contents{
@@ -43,8 +50,15 @@
       }
     }
 
+    .custom-url-editor {
+      border: 1px solid #d9d9d9;
+      border-radius: 4px;
+      padding: 10px;
+    }
+
     div.validation-error {
       color: #fe5050;
+      font-size: 12px;
     }
 
     small {

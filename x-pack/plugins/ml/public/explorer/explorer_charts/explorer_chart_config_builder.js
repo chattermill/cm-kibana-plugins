@@ -18,10 +18,11 @@
  * the raw data in the Explorer dashboard.
  */
 
-const _ = require('lodash');
+import _ from 'lodash';
 
 import { parseInterval } from 'ui/utils/parse_interval';
 import { buildConfigFromDetector } from 'plugins/ml/util/chart_config_builder';
+import { mlEscape } from 'plugins/ml/util/string_utils';
 
 export function explorerChartConfigBuilder(mlJobService) {
 
@@ -52,8 +53,7 @@ export function explorerChartConfigBuilder(mlJobService) {
       config.detectorLabel = mlJobService.detectorsByJob[record.job_id][detectorIndex].detector_description;
     } else {
       if (record.field_name !== undefined) {
-        config.detectorLabel += ' ';
-        config.detectorLabel += config.fieldName;
+        config.detectorLabel += ` ${config.fieldName}`;
       }
     }
 
@@ -83,15 +83,17 @@ export function explorerChartConfigBuilder(mlJobService) {
     // Build the tooltip for the chart info icon, showing further details on what is being plotted.
     let functionLabel = config.metricFunction;
     if (config.metricFieldName !== undefined) {
-      functionLabel += ' ';
-      functionLabel += config.metricFieldName;
+      functionLabel += ` ${mlEscape(config.metricFieldName)}`;
     }
 
     config.infoTooltip = compiledTooltip({
-      'jobId':record.job_id,
-      'aggregationInterval': config.interval,
-      'chartFunction': functionLabel,
-      'entityFields': config.entityFields
+      jobId: record.job_id,
+      aggregationInterval: config.interval,
+      chartFunction: functionLabel,
+      entityFields: config.entityFields.map((f) => ({
+        fieldName: mlEscape(f.fieldName),
+        fieldValue: mlEscape(f.fieldValue),
+      }))
     });
 
     return config;

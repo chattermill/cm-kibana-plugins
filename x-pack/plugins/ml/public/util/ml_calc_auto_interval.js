@@ -13,15 +13,15 @@
  * strictly prohibited.
  */
 
- // Based on Kibana ui/time_buckets/calc_auto_interval.js but with
- // a few modifications:
- //   - edit to the near rule, so that it returns either the
- //    upper or lower rule bound, depending on which is closest to the
- //    supplied target.
- //   - edit to the lessThan rule so that the interval returned gives
- //     fewer buckets than the supplied target.
- //   - edits to the list of roundingRules to align better with the
- //    Ml job bucket span options.
+// Based on Kibana ui/time_buckets/calc_auto_interval.js but with
+// a few modifications:
+//   - edit to the near rule, so that it returns either the
+//    upper or lower rule bound, depending on which is closest to the
+//    supplied target.
+//   - edit to the lessThan rule so that the interval returned gives
+//     fewer buckets than the supplied target.
+//   - edits to the list of roundingRules to align better with the
+//    Ml job bucket span options.
 
 import moment, { duration as d } from 'moment';
 export function TimeBucketsCalcAutoIntervalProvider() {
@@ -43,7 +43,8 @@ export function TimeBucketsCalcAutoIntervalProvider() {
     [ d(1, 'hour'), d(30, 'minute') ],
     [ d(2, 'hour'), d(1, 'hour') ],
     [ d(4, 'hour'), d(2, 'hour') ],
-    [ d(8, 'hour'), d(4, 'hour') ],
+    [ d(6, 'hour'), d(4, 'hour') ],
+    [ d(8, 'hour'), d(6, 'hour') ],
     [ d(12, 'hour'), d(8, 'hour') ],
     [ d(24, 'hour'), d(12, 'hour') ],
     [ d(2, 'd'), d(1, 'd') ],

@@ -6,7 +6,7 @@ const defaultSize = 10;
 
 function jobsQueryFn(server) {
   const index = server.config().get('xpack.reporting.index');
-  const { callWithInternalUser, errors:esErrors } = server.plugins.elasticsearch.getCluster('admin');
+  const { callWithInternalUser, errors: esErrors } = server.plugins.elasticsearch.getCluster('admin');
 
   function getUsername(user) {
     return get(user, 'username', false);
@@ -15,7 +15,7 @@ function jobsQueryFn(server) {
   function execQuery(type, body) {
     const defaultBody = {
       search: {
-        _source : {
+        _source: {
           excludes: [ 'output.content' ]
         },
         sort: [
@@ -32,12 +32,12 @@ function jobsQueryFn(server) {
     };
 
     return callWithInternalUser(type, query)
-    .catch((err) => {
-      if (err instanceof esErrors['401']) return;
-      if (err instanceof esErrors['403']) return;
-      if (err instanceof esErrors['404']) return;
-      throw err;
-    });
+      .catch((err) => {
+        if (err instanceof esErrors['401']) return;
+        if (err instanceof esErrors['403']) return;
+        if (err instanceof esErrors['404']) return;
+        throw err;
+      });
   }
 
   function getHits(query) {
@@ -56,8 +56,8 @@ function jobsQueryFn(server) {
             filter: {
               bool: {
                 must: [
-                   { terms: { jobtype: jobTypes } },
-                   { term: { created_by: username } },
+                  { terms: { jobtype: jobTypes } },
+                  { term: { created_by: username } },
                 ]
               }
             }
@@ -93,10 +93,10 @@ function jobsQueryFn(server) {
       };
 
       return execQuery('count', body)
-      .then((doc) => {
-        if (!doc) return 0;
-        return doc.count;
-      });
+        .then((doc) => {
+          if (!doc) return 0;
+          return doc.count;
+        });
     },
 
     get(user, id, opts = {}) {
@@ -127,10 +127,10 @@ function jobsQueryFn(server) {
       }
 
       return getHits(execQuery('search', body))
-      .then((hits) => {
-        if (hits.length !== 1) return;
-        return hits[0];
-      });
+        .then((hits) => {
+          if (hits.length !== 1) return;
+          return hits[0];
+        });
     }
   };
 }

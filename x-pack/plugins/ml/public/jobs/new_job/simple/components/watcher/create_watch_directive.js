@@ -39,10 +39,10 @@ module.directive('mlCreateWatch', function (es, ml, mlCreateWatchService) {
 
       $scope.ui = {
         thresholdOptions: [
-          { display:'critical', val:75 },
-          { display:'major', val:50 },
-          { display:'minor', val:25 },
-          { display:'warning', val:0 }
+          { display: 'critical', val: 75 },
+          { display: 'major', val: 50 },
+          { display: 'minor', val: 25 },
+          { display: 'warning', val: 0 }
         ],
         setThreshold: (t) => {
           $scope.config.threshold = t;
@@ -72,12 +72,12 @@ module.directive('mlCreateWatch', function (es, ml, mlCreateWatchService) {
       // check to see whether a watch for this job has already been created.
       // display a warning if it has.
       mlCreateWatchService.loadWatch($scope.jobId)
-      .then(() => {
-        $scope.ui.watchAlreadyExists = true;
-      })
-      .catch(() => {
-        $scope.ui.watchAlreadyExists = false;
-      });
+        .then(() => {
+          $scope.ui.watchAlreadyExists = true;
+        })
+        .catch(() => {
+          $scope.ui.watchAlreadyExists = false;
+        });
     }
   };
 });

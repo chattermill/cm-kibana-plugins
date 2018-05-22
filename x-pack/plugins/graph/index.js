@@ -32,6 +32,7 @@ export function graph(kibana) {
         ]
       },
       hacks: ['plugins/graph/hacks/toggle_app_link_in_nav'],
+      home: ['plugins/graph/register_feature'],
       mappings
     },
 
@@ -39,7 +40,7 @@ export function graph(kibana) {
       return Joi.object({
         enabled: Joi.boolean().default(true),
         canEditDrillDownUrls: Joi.boolean().default(true),
-        savePolicy : Joi.string().valid(['config','configAndDataWithConsent','configAndData','none']).default('configAndData'),
+        savePolicy: Joi.string().valid(['config', 'configAndDataWithConsent', 'configAndData', 'none']).default('configAndData'),
       }).default();
     },
 
@@ -47,4 +48,4 @@ export function graph(kibana) {
       initServer(server);
     },
   });
-};
+}

@@ -18,6 +18,8 @@
  * anomalies in the raw data in the Machine Learning Explorer dashboard.
  */
 
+import './styles/explorer_charts_container_directive.less';
+
 import _ from 'lodash';
 import $ from 'jquery';
 import moment from 'moment';
@@ -25,6 +27,7 @@ import rison from 'rison-node';
 
 import chrome from 'ui/chrome';
 import 'ui/timefilter';
+import template from './explorer_charts_container.html';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
@@ -47,8 +50,8 @@ module.directive('mlExplorerChartsContainer', function ($window, timefilter) {
       const from = bounds.min.toISOString();    // e.g. 2016-02-08T16:00:00.000Z
       const to = bounds.max.toISOString();
 
-      const zoomFrom = moment(scope.plotEarliest).toISOString();
-      const zoomTo = moment(scope.plotLatest).toISOString();
+      const zoomFrom = moment(series.plotEarliest).toISOString();
+      const zoomTo = moment(series.plotLatest).toISOString();
 
       // Pass the detector index and entity fields (i.e. by, over, partition fields)
       // to identify the particular series to view.
@@ -97,7 +100,7 @@ module.directive('mlExplorerChartsContainer', function ($window, timefilter) {
       let path = chrome.getBasePath();
       path += '/app/ml#/timeseriesexplorer';
       path += '?_g=' + _g;
-      path += '&_a=' + _a;
+      path += '&_a=' + encodeURIComponent(_a);
       $window.open(path, '_blank');
 
     };
@@ -107,15 +110,11 @@ module.directive('mlExplorerChartsContainer', function ($window, timefilter) {
   	restrict: 'E',
     scope: {
       seriesToPlot: '=',
-      plotEarliest: '=',
-      plotLatest: '=',
-      selectedEarliest: '=',
-      selectedLatest: '=',
       chartsPerRow: '=',
       layoutCellsPerChart: '=',
       tooManyBuckets: '='
     },
     link: link,
-    template: require('plugins/ml/explorer/explorer_charts/explorer_charts_container.html')
+    template
   };
 });

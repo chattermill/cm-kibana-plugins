@@ -18,28 +18,39 @@ import _ from 'lodash';
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
 import template from './elastic_data_description.html';
+import { ML_JOB_FIELD_TYPES } from 'plugins/ml/../common/constants/field_types';
 
 module.directive('mlElasticDataDescription', function () {
   return {
     restrict: 'AE',
     replace: true,
     scope: {
-      ui:                 '=mlUi',
-      properties:         '=mlProperties',
-      dateProperties:     '=mlDateProperties',
-      catProperties:      '=mlCatProperties',
-      indices:            '=mlIndices',
-      types:              '=mlTypes',
-      mode:               '=mlMode',
-      datafeed_config:    '=mlDatafeedConfig',
-      data_description:   '=mlDataDescription',
+      ui: '=mlUi',
+      properties: '=mlProperties',
+      dateProperties: '=mlDateProperties',
+      catProperties: '=mlCatProperties',
+      indices: '=mlIndices',
+      types: '=mlTypes',
+      mode: '=mlMode',
+      datafeed_config: '=mlDatafeedConfig',
+      data_description: '=mlDataDescription',
       dataLoadedCallback: '=mlDataLoadedCallback',
-      exposedFunctions:   '=mlExposedFunctions',
-      serverInfo:         '=mlElasticServerInfo'
+      exposedFunctions: '=mlExposedFunctions',
+      serverInfo: '=mlElasticServerInfo'
     },
     template,
     controller: function ($scope, $q, $location, mlJobService) {
-      const MODE = { NEW: 0, EDIT: 1, CLONE: 2 };
+      const MODE = {
+        NEW: 0,
+        EDIT: 1,
+        CLONE: 2
+      };
+      const INDEX_INPUT_TYPE = {
+        TEXT: 'TEXT',
+        LIST: 'LIST'
+      };
+      $scope.INDEX_INPUT_TYPE = INDEX_INPUT_TYPE;
+
       $scope.saveLock = false;
       let keyPressTimeout = null;
 
@@ -75,8 +86,16 @@ module.directive('mlElasticDataDescription', function () {
         // if this is a datafeed job being cloned
         // load the indices and types
         getMappings().then(() => {
-          if ($scope.mode === MODE.CLONE && $scope.ui.isDatafeed) {
-           // first load mappings, then extract types and fields.
+          if ($scope.ui.datafeed.indicesText !== '') {
+            // if the index pattern has been pre-populated from the url,
+            // trigger the field extraction
+            $scope.extractFields();
+            if ($scope.ui.wizard.step < 2) {
+              // skip to the final stage of the wizard
+              $scope.ui.wizard.forward();
+            }
+          } else if ($scope.mode === MODE.CLONE && $scope.ui.isDatafeed) {
+            // first load mappings, then extract types and fields.
             setUpClonedJob();
           }
         });
@@ -124,7 +143,12 @@ module.directive('mlElasticDataDescription', function () {
         // typesIn gets passed in when types checkboxes get toggled
         // use this list, or empty the list entirely
         if (typesIn && typesIn.hasOwnProperty('types')) {
-          $scope.types = typesIn.types;
+          if (Object.keys(typesIn.types).length === 0) {
+            // if the types array is empty, set $scope.types to be all types
+            $scope.types = $scope.ui.types;
+          } else {
+            $scope.types = typesIn.types;
+          }
         } else {
           clear($scope.types);
         }
@@ -145,17 +169,17 @@ module.directive('mlElasticDataDescription', function () {
         extractTypesFromIndices();
 
         if ($scope.uiTypeKeys().length) {
-          // diplay a green tick for indices
-          // diplay types selection
+          // display a green tick for indices
+          // display types selection
           $scope.ui.indexTextOk = true;
         }
 
         const ignoreFields = collectCopyToFields($scope.types);
         let flatFields = extractFlatFields($scope.types);
 
-        // add text fields to list of fields used for the categoriztion field name
+        // add text fields to list of fields used for the categorization field name
         _.each(flatFields, (prop, key) => {
-          if (prop.type === 'text' || prop.type === 'keyword') {
+          if (prop.type === ML_JOB_FIELD_TYPES.TEXT || prop.type === ML_JOB_FIELD_TYPES.KEYWORD) {
             $scope.catProperties[key] = prop;
           }
         });
@@ -169,7 +193,7 @@ module.directive('mlElasticDataDescription', function () {
           }
           // add property (field) to list
           $scope.properties[key] = prop;
-          if (prop.type === 'date') {
+          if (prop.type === ML_JOB_FIELD_TYPES.DATE) {
             // add date field to list of date fields
             $scope.dateProperties[key] = prop;
           }
@@ -177,7 +201,6 @@ module.directive('mlElasticDataDescription', function () {
 
         const keys = Object.keys($scope.types);
         $scope.ui.datafeed.typesText  = keys.join(', ');
-        // $scope.ui.influencers = Object.keys($scope.properties);
 
         // influencers is an array of property names.
         // properties of a certain type (nonInfluencerTypes) are rejected.
@@ -199,14 +222,14 @@ module.directive('mlElasticDataDescription', function () {
       // create $scope.ui.types based on the indices selected
       // called when extracting fields and when cloning a job
       function extractTypesFromIndices(fromClone) {
-        if ($scope.ui.wizard.indexInputType === 'TEXT') {
+        if ($scope.ui.wizard.indexInputType === INDEX_INPUT_TYPE.TEXT) {
           clear($scope.indices);
           // parse comma separated list of indices
           const indices = $scope.ui.datafeed.indicesText.split(',');
           _.each(indices, (ind) => {
             ind = ind.trim();
             // catch wildcard text entry
-            ind = ind.replace(/\*/g, '.+');
+            ind = ind.replace(/\*/g, '.*');
             const reg = new RegExp('^' + ind + '$');
 
             _.each($scope.ui.indices, (index, key) => {
@@ -254,35 +277,35 @@ module.directive('mlElasticDataDescription', function () {
 
         $scope.ui.validation.setTabValid(4, true);
         mlJobService.getESMappings()
-        .then((indices) => {
-          $scope.ui.indices  = indices;
-          $scope.ui.esServerOk = 1;
-          console.log('getMappings():', $scope.ui.indices);
+          .then((indices) => {
+            $scope.ui.indices  = indices;
+            $scope.ui.esServerOk = 1;
+            console.log('getMappings():', $scope.ui.indices);
 
-          if ($scope.mode === MODE.CLONE) {
-            setUpClonedJob();
-          }
+            if ($scope.mode === MODE.CLONE) {
+              setUpClonedJob();
+            }
 
-          deferred.resolve();
+            deferred.resolve();
 
-        })
-        .catch((err) => {
-          console.log('getMappings:', err);
-          if (err.statusCode) {
-            if (err.statusCode === 401) {
-              $scope.ui.validation.setTabValid(4, false);
-            } else if (err.statusCode === 403) {
-              $scope.ui.validation.setTabValid(4, false);
+          })
+          .catch((err) => {
+            console.log('getMappings:', err);
+            if (err.statusCode) {
+              if (err.statusCode === 401) {
+                $scope.ui.validation.setTabValid(4, false);
+              } else if (err.statusCode === 403) {
+                $scope.ui.validation.setTabValid(4, false);
+              } else {
+                clearMappings();
+              }
+              $scope.ui.esServerOk = -1;
             } else {
               clearMappings();
             }
-            $scope.ui.esServerOk = -1;
-          } else {
-            clearMappings();
-          }
 
-          deferred.reject();
-        });
+            deferred.reject();
+          });
 
         function clearMappings() {
           $scope.ui.indices = [];
@@ -323,13 +346,13 @@ module.directive('mlElasticDataDescription', function () {
         if ($scope.allTypesSelected()) {
           clear($scope.types);
         } else {
-          // otherwsise, select all
+          // otherwise, select all
           $scope.uiTypeKeys().forEach((key) => {
             $scope.types[key] = $scope.ui.types[key];
           });
         }
 
-        // trigger field extraction and timeformat guessing
+        // trigger field extraction and time format guessing
         $scope.extractFields({ types: $scope.types });
         guessTimeField();
       };
@@ -425,15 +448,15 @@ module.directive('mlElasticDataDescription', function () {
         }
       }
 
-      // modify the names of text fields which contain keyword subfields
+      // modify the names of text fields which contain keyword sub-fields
       function renameMultiFields(fields) {
         const renamedFields = {};
         _.each(fields, (field, k) => {
           let name = k;
-          if (field.type === 'text') {
+          if (field.type === ML_JOB_FIELD_TYPES.TEXT) {
             if(field.fields) {
               _.each(field.fields, (subField, sfk) => {
-                if (subField.type === 'keyword') {
+                if (subField.type === ML_JOB_FIELD_TYPES.KEYWORD) {
                   name = `${name}.${sfk}`;
                 }
               });

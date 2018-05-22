@@ -6,7 +6,7 @@ export class BaseAction {
     this.type = get(props, 'type');
   }
 
-  get upstreamJSON() {
+  get upstreamJson() {
     const result = {
       id: this.id,
       type: this.type
@@ -44,4 +44,4 @@ export class BaseAction {
   static template = '';
   static selectMessage = 'Perform an action.';
   static simulatePrompt = 'Simulate this action now';
-};
+}

@@ -1,8 +1,8 @@
-import moment from 'moment';
 import Joi from 'joi';
 import { getClusterStatus } from '../../../../../lib/logstash/get_cluster_status';
 import { getPipelines } from '../../../../../lib/logstash/get_pipelines';
-import { handleError } from '../../../../../lib/handle_error';
+import { handleError } from '../../../../../lib/errors';
+import { prefixIndexPattern } from '../../../../../lib/ccs_utils';
 
 /**
  * Retrieve pipelines for a cluster
@@ -17,25 +17,25 @@ export function logstashClusterPipelinesRoute(server) {
           clusterUuid: Joi.string().required()
         }),
         payload: Joi.object({
+          ccs: Joi.string().optional(),
           timeRange: Joi.object({
             min: Joi.date().required(),
             max: Joi.date().required()
-          }).required()
+          }).required(),
+          metrics: Joi.array().items(Joi.string()).required()
         })
       }
     },
     handler: async (req, reply) => {
       const config = server.config();
-      const logstashIndexPattern = config.get('xpack.monitoring.logstash.index_pattern');
-
-      const start = moment(req.payload.timeRange.min).valueOf();
-      const end = moment(req.payload.timeRange.max).valueOf();
+      const ccs = req.payload.ccs;
       const clusterUuid = req.params.clusterUuid;
+      const lsIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.logstash.index_pattern', ccs);
 
       try {
         const response = {
-          pipelines: await getPipelines(req, config, logstashIndexPattern, start, end, clusterUuid),
-          clusterStatus: await getClusterStatus(req, logstashIndexPattern)
+          pipelines: await getPipelines(req, lsIndexPattern),
+          clusterStatus: await getClusterStatus(req, lsIndexPattern, { clusterUuid })
         };
         reply(response);
       } catch (err) {

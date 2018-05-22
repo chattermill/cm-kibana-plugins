@@ -13,23 +13,23 @@
  * strictly prohibited.
  */
 
-import { getClient } from '../get_client_ml';
+import { callWithRequestFactory } from '../get_client_ml';
 import { wrapError } from '../errors';
 
 export function notificationRoutes(server, commonRouteConfig) {
-  const callWithRequest = getClient(server).callWithRequest;
 
   server.route({
     method: 'GET',
     path: '/api/ml/notification_settings',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const params = {
         includeDefaults: true,
         filterPath: '**.xpack.notification'
       };
-      return callWithRequest(request, 'cluster.getSettings', params)
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('cluster.getSettings', params)
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig

@@ -1,32 +1,20 @@
-import { unlink } from 'fs';
+import Rx from 'rxjs/Rx';
 import { capitalize, some } from 'lodash';
 import { getTimeFilterRange } from './get_time_filter_range';
 import { pdf } from './pdf';
 import { oncePerServer } from '../../../../server/lib/once_per_server';
-import { getScreenshotFactory } from './get_screenshot';
+import { screenshotsObservableFactory } from './screenshots';
 import { getAbsoluteUrlFactory } from './get_absolute_url';
+import { getLayoutFactory } from './layouts';
 
-function generatePdfFn(server) {
-  const getScreenshot = getScreenshotFactory(server);
-  const warningLog = (msg) => server.log(['reporting', 'warning'], msg);
+function generatePdfObservableFn(server) {
   const getAbsoluteUrl = getAbsoluteUrlFactory(server);
+  const screenshotsObservable = screenshotsObservableFactory(server);
+  const config = server.config();
+  const captureConcurrency = config.get('xpack.reporting.capture.concurrency');
+  const getLayout = getLayoutFactory(server);
 
-  function cleanImages(cleanupPaths) {
-    return Promise.all(cleanupPaths.map(imagePath => {
-      return new Promise((resolve, reject) => {
-        return unlink(imagePath, (err) => {
-          if (err) { return reject(err); }
-          resolve();
-        });
-      });
-    }))
-    .catch((err) => {
-      // any failures to remove images are silently swallowed
-      warningLog(`Failed to remove screenshot image: ${err.path}`);
-    });
-  }
-
-  function getUrl(savedObj) {
+  const getUrl = (savedObj) => {
     if (savedObj.urlHash) {
       return getAbsoluteUrl(savedObj.urlHash);
     }
@@ -36,60 +24,63 @@ function generatePdfFn(server) {
     }
 
     throw new Error(`Unable to generate report for url ${savedObj.url}, it's not a Kibana URL`);
-  }
+  };
 
-  return function generatePdf(title, savedObjects, query, headers, browserTimezone) {
-    const pdfOutput = pdf.create();
+  const savedObjectsScreenshotsObservable = (savedObjects, headers, layout) => {
+    return Rx.Observable
+      .from(savedObjects)
+      .mergeMap(
+        savedObject => {
+          if (savedObject.isMissing) {
+            return Rx.Observable.of({ savedObject });
+          }
 
-    return Promise.all(savedObjects.map((savedObj) => {
-      if (savedObj.isMissing) {
-        return  { savedObj };
+          return screenshotsObservable(getUrl(savedObject), headers, layout);
+        },
+        (savedObject, { isTimepickerEnabled, screenshots }) => ({ savedObject, isTimepickerEnabled, screenshots }),
+        captureConcurrency
+      );
+  };
+
+
+  const createPdfWithScreenshots = async ({ title, query, objects, browserTimezone, layout, logo }) => {
+    const pdfOutput = pdf.create(layout, logo);
+
+    if (title) {
+      const timeRange = some(objects, { isTimepickerEnabled: true }) ? getTimeFilterRange(browserTimezone, query) : null;
+      title += (timeRange) ? ` — ${timeRange.from} to ${timeRange.to}` : '';
+      pdfOutput.setTitle(title);
+    }
+
+    objects.forEach(({ savedObject, screenshots }) => {
+      if (savedObject.isMissing) {
+        pdfOutput.addHeading(`${capitalize(savedObject.type)} with id '${savedObject.id}' not found`, {
+          styles: 'warning'
+        });
       } else {
-        return getScreenshot(getUrl(savedObj), savedObj.type, headers)
-        .then(({ isTimepickerEnabled, screenshots }) => {
-          server.log(['reporting', 'debug'], `${savedObj.id} -> ${JSON.stringify(screenshots)}`);
-          return { isTimepickerEnabled, screenshots, savedObj };
+        screenshots.forEach(screenshot => {
+          pdfOutput.addImage(screenshot.base64EncodedData, {
+            title: screenshot.title,
+            description: screenshot.description,
+          });
         });
       }
-    }))
-    .then(objects => {
-      const cleanupPaths = [];
-
-      if (title) {
-        const timeRange = some(objects, { isTimepickerEnabled: true }) ? getTimeFilterRange(browserTimezone, query) : null;
-        title += (timeRange) ? ` — ${timeRange.from} to ${timeRange.to}` : '';
-        pdfOutput.setTitle(title);
-      }
-
-      objects.forEach(object => {
-        const { screenshots, savedObj } = object;
-        if (screenshots) cleanupPaths.push.apply(cleanupPaths, screenshots.map(s => s.filepath));
-
-        if (savedObj.isMissing) {
-          pdfOutput.addHeading(`${capitalize(savedObj.type)} with id '${savedObj.id}' not found`, {
-            styles: 'warning'
-          });
-        } else {
-          screenshots.forEach(screenshot => {
-            pdfOutput.addImage(screenshot.filepath, {
-              title: screenshot.title,
-              description: screenshot.description,
-            });
-          });
-        }
-      });
-
-      return cleanupPaths;
-    })
-    .then(cleanupPaths => {
-      try {
-        const pdfInstance = pdfOutput.generate();
-        return cleanImages(cleanupPaths).then(() => pdfInstance);
-      } catch (err) {
-        return cleanImages(cleanupPaths).then(() => { throw err; });
-      }
     });
+
+    pdfOutput.generate();
+    const buffer = await pdfOutput.getBuffer();
+    return buffer;
+  };
+
+  return function generatePdfObservable(title, savedObjects, query, headers, browserTimezone, layoutParams, logo) {
+    const layout = getLayout(layoutParams);
+    const screenshots$ = savedObjectsScreenshotsObservable(savedObjects, headers, layout);
+
+    return screenshots$
+      .toArray()
+      .mergeMap(objects => createPdfWithScreenshots({ title, query, browserTimezone, objects, layout, logo }));
+
   };
 }
 
-export const generatePdfFactory = oncePerServer(generatePdfFn);
+export const generatePdfObservableFactory = oncePerServer(generatePdfObservableFn);

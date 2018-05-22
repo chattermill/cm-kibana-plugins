@@ -22,26 +22,32 @@ const schema = {
   }
 };
 
-export function createIndex(client, indexName, doctype = constants.DEFAULT_SETTING_DOCTYPE, settings = {}) {
-  const indexBody = { mappings : {} };
-  indexBody.mappings[doctype] = { properties: schema };
-
+export function createIndex(client, indexName,
+  doctype = constants.DEFAULT_SETTING_DOCTYPE,
+  indexSettings = { }) {
   const body = {
-    settings,
-    ...indexBody
+    settings: {
+      ...constants.DEFAULT_SETTING_INDEX_SETTINGS,
+      ...indexSettings
+    },
+    mappings: {
+      [doctype]: {
+        properties: schema
+      }
+    }
   };
 
   return client.indices.exists({
     index: indexName,
   })
-  .then((exists) => {
-    if (!exists) {
-      return client.indices.create({
-        index: indexName,
-        body: body
-      })
-      .then(() => true);
-    }
-    return exists;
-  });
+    .then((exists) => {
+      if (!exists) {
+        return client.indices.create({
+          index: indexName,
+          body: body
+        })
+          .then(() => true);
+      }
+      return exists;
+    });
 }

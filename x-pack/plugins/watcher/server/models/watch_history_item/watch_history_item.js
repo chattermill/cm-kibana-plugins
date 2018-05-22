@@ -1,3 +1,4 @@
+import { badRequest } from 'boom';
 import { getMoment } from '../../../common/lib/get_moment';
 import { get, cloneDeep } from 'lodash';
 import { WatchStatus } from '../watch_status';
@@ -14,29 +15,29 @@ export class WatchHistoryItem {
 
     const watchStatusJson = get(this.watchHistoryItemJson, 'status');
     const state = get(this.watchHistoryItemJson, 'state');
-    this.watchStatus = WatchStatus.fromUpstreamJSON({ id: this.watchId, watchStatusJson, state });
+    this.watchStatus = WatchStatus.fromUpstreamJson({ id: this.watchId, watchStatusJson, state });
   }
 
-  get downstreamJSON() {
+  get downstreamJson() {
     return {
       id: this.id,
       watchId: this.watchId,
       details: this.includeDetails ? this.details : null,
       startTime: this.startTime.toISOString(),
-      watchStatus: this.watchStatus.downstreamJSON
+      watchStatus: this.watchStatus.downstreamJson
     };
   }
 
   // generate object from elasticsearch response
-  static fromUpstreamJSON(json, opts) {
+  static fromUpstreamJson(json, opts) {
     if (!json.id) {
-      throw new Error('json argument must contain a id property');
+      throw badRequest('json argument must contain a id property');
     }
     if (!json.watchId) {
-      throw new Error('json argument must contain a watchId property');
+      throw badRequest('json argument must contain a watchId property');
     }
     if (!json.watchHistoryItemJson) {
-      throw new Error('json argument must contain a watchHistoryItemJson property');
+      throw badRequest('json argument must contain a watchHistoryItemJson property');
     }
 
     const props = { ...json, ...opts };

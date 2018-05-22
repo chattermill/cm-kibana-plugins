@@ -24,6 +24,7 @@
 import _ from 'lodash';
 import moment from 'moment';
 
+import template from './expanded_row.html';
 import {
   getSeverity,
   showActualForFunction,
@@ -178,7 +179,7 @@ module.directive('mlAnomaliesTableExpandedRow', function () {
         const influencers = [];
         _.each(scope.record.influencers, function (influencer) {
           _.each(influencer, function (influencerFieldValue, influencerFieldName) {
-            influencers.push({ 'name':influencerFieldName, 'value': influencerFieldValue });
+            influencers.push({ 'name': influencerFieldName, 'value': influencerFieldValue });
           });
         });
         scope.influencers = influencers;
@@ -191,7 +192,7 @@ module.directive('mlAnomaliesTableExpandedRow', function () {
     restrict: 'AE',
     replace: false,
     scope: {},
-    template: require('plugins/ml/components/anomalies_table/expanded_row/expanded_row.html'),
+    template,
     link: link
   };
 });

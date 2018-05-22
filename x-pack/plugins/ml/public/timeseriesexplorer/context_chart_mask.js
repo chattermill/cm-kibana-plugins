@@ -27,15 +27,15 @@ export default function ContextChartMask(contextGroup, data, drawBounds, swimlan
   this.data = data;
   this.drawBounds = drawBounds;
   this.swimlaneHeight = swimlaneHeight;
-  this.mask  = this.contextGroup.append('g').attr('class','mask');
+  this.mask  = this.contextGroup.append('g').attr('class', 'mask');
 
   // Create groups for the left and right sides of the mask.
-  this.leftGroup = this.mask.append('g').attr('class','left-mask');
-  this.rightGroup = this.mask.append('g').attr('class','right-mask');
+  this.leftGroup = this.mask.append('g').attr('class', 'left-mask');
+  this.rightGroup = this.mask.append('g').attr('class', 'right-mask');
 
   // Create polygons to provide opacity over the left and right sections of the mask.
   this.leftPolygon = this.leftGroup.append('polygon');
-  this.rightPolygon = this.leftGroup.append('polygon');
+  this.rightPolygon = this.rightGroup.append('polygon');
 
   // Create the path elements for the bounded area and values line.
   if (this.drawBounds === true) {
@@ -125,13 +125,13 @@ ContextChartMask.prototype.redraw = function () {
     l: this._x(minX),
     t: this._y(minY) + this.swimlaneHeight,
     r: this._x(this.from),
-    b: this._y(maxY)
+    b: 0
   };
   const rightPoly = {
     l: this._x(this.to),
     t: this._y(minY) + this.swimlaneHeight,
     r: this._x(maxX),
-    b: this._y(maxY)
+    b: 0
   };
   this.leftPolygon.attr('points', '' + leftPoly.l + ',' + leftPoly.t + '  ' + leftPoly.r + ',' + leftPoly.t +
     '  ' + leftPoly.r + ',' + leftPoly.b + '  ' + leftPoly.l + ',' + leftPoly.b);

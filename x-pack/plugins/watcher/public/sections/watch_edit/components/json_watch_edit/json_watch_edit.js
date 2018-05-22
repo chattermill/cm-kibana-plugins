@@ -1,7 +1,7 @@
 import { uiModules } from 'ui/modules';
 import { InitAfterBindingsWorkaround } from 'ui/compat';
 import { Notifier } from 'ui/notify/notifier';
-import 'plugins/watcher/services/dirty_prompt';
+import 'ui/dirty_prompt';
 import template from './json_watch_edit.html';
 import 'plugins/watcher/components/kbn_tabs';
 import 'plugins/watcher/components/watch_history_item_detail';
@@ -20,7 +20,7 @@ app.directive('jsonWatchEdit', function ($injector) {
   const licenseService = $injector.get('xpackWatcherLicenseService');
   const kbnUrl = $injector.get('kbnUrl');
   const confirmModal = $injector.get('confirmModal');
-  const dirtyPrompt = $injector.get('xpackWatcherDirtyPrompt');
+  const dirtyPrompt = $injector.get('dirtyPrompt');
 
   return {
     restrict: 'E',
@@ -85,13 +85,13 @@ app.directive('jsonWatchEdit', function ($injector) {
 
       onWatchExecute = () => {
         return watchService.executeWatch(this.executeDetails, this.watch)
-        .then((watchHistoryItem) => {
-          this.simulateResults = watchHistoryItem;
-          this.onTabSelect('simulate-results');
-        })
-        .catch(e => {
-          this.notifier.error(e);
-        });
+          .then((watchHistoryItem) => {
+            this.simulateResults = watchHistoryItem;
+            this.onTabSelect('simulate-results');
+          })
+          .catch(e => {
+            this.notifier.error(e);
+          });
       }
 
       onWatchSave = () => {
@@ -100,50 +100,50 @@ app.directive('jsonWatchEdit', function ($injector) {
         }
 
         return this.isExistingWatch()
-        .then(existingWatch => {
-          if (!existingWatch) {
-            return this.saveWatch();
-          }
+          .then(existingWatch => {
+            if (!existingWatch) {
+              return this.saveWatch();
+            }
 
-          const confirmModalOptions = {
-            onConfirm: this.saveWatch,
-            confirmButtonText: 'Overwrite Watch'
-          };
+            const confirmModalOptions = {
+              onConfirm: this.saveWatch,
+              confirmButtonText: 'Overwrite Watch'
+            };
 
-          const watchNameMessageFragment = existingWatch.name ? ` (name: "${existingWatch.name}")` : '';
-          const message = `Watch with ID "${this.watch.id}"${watchNameMessageFragment} already exists. Do you want to overwrite it?`;
-          return confirmModal(message, confirmModalOptions);
-        })
-        .catch(err => this.notifier.error(err));
+            const watchNameMessageFragment = existingWatch.name ? ` (name: "${existingWatch.name}")` : '';
+            const message = `Watch with ID "${this.watch.id}"${watchNameMessageFragment} already exists. Do you want to overwrite it?`;
+            return confirmModal(message, confirmModalOptions);
+          })
+          .catch(err => this.notifier.error(err));
       }
 
       isExistingWatch = () => {
         return watchService.loadWatch(this.watch.id)
-        .then(existingWatch => {
-          return existingWatch;
-        })
-        .catch(err => {
-          return licenseService.checkValidity()
-          .then(() => {
-            if (err.status === 404) {
-              return false;
-            }
-            throw err;
+          .then(existingWatch => {
+            return existingWatch;
+          })
+          .catch(err => {
+            return licenseService.checkValidity()
+              .then(() => {
+                if (err.status === 404) {
+                  return false;
+                }
+                throw err;
+              });
           });
-        });
       }
 
       saveWatch = () => {
         return watchService.saveWatch(this.watch)
-        .then(() => {
-          this.watch.isNew = false; // without this, the message displays 'New Watch'
-          this.notifier.info(`Saved Watch "${this.watch.displayName}"`);
-          this.onClose();
-        })
-        .catch(err => {
-          return licenseService.checkValidity()
-          .then(() => this.notifier.error(err));
-        });
+          .then(() => {
+            this.watch.isNew = false; // without this, the message displays 'New Watch'
+            this.notifier.info(`Saved Watch "${this.watch.displayName}"`);
+            this.onClose();
+          })
+          .catch(err => {
+            return licenseService.checkValidity()
+              .then(() => this.notifier.error(err));
+          });
       }
 
       onWatchDelete = () => {
@@ -157,14 +157,14 @@ app.directive('jsonWatchEdit', function ($injector) {
 
       deleteWatch = () => {
         return watchService.deleteWatch(this.watch.id)
-        .then(() => {
-          this.notifier.info(`Deleted Watch "${this.watch.displayName}"`);
-          this.onClose();
-        })
-        .catch(err => {
-          return licenseService.checkValidity()
-          .then(() => this.notifier.error(err));
-        });
+          .then(() => {
+            this.notifier.info(`Deleted Watch "${this.watch.displayName}"`);
+            this.onClose();
+          })
+          .catch(err => {
+            return licenseService.checkValidity()
+              .then(() => this.notifier.error(err));
+          });
       }
 
       onClose = () => {

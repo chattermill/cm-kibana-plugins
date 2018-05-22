@@ -59,8 +59,8 @@ export class ThresholdWatch extends BaseWatch {
     return `${staticPart} This will run once every ${this.triggerIntervalSize} ${timeUnitLabel}.`;
   }
 
-  get upstreamJSON() {
-    const result = super.upstreamJSON;
+  get upstreamJson() {
+    const result = super.upstreamJson;
     Object.assign(result, {
       index: this.index,
       timeField: this.timeField,
@@ -79,7 +79,7 @@ export class ThresholdWatch extends BaseWatch {
     return result;
   }
 
-  static fromUpstreamJSON(upstreamWatch) {
+  static fromUpstreamJson(upstreamWatch) {
     return new ThresholdWatch(upstreamWatch);
   }
 
@@ -92,4 +92,4 @@ export class ThresholdWatch extends BaseWatch {
   static selectMessage = 'Send out an alert on a specific condition.';
   static isCreatable = true;
   static selectSortOrder = 1;
-};
+}

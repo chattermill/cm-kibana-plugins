@@ -15,6 +15,7 @@
 
 import _ from 'lodash';
 import './styles/main.less';
+import template from './messagebar.html';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
@@ -67,16 +68,16 @@ module.service('mlMessageBarService', function () {
   }
 })
 
-.controller('MlMessageBarController', function ($scope, mlMessageBarService) {
-  $scope.messages = mlMessageBarService.messages;
-  $scope.removeMessage = mlMessageBarService.removeMessage;
-})
+  .controller('MlMessageBarController', function ($scope, mlMessageBarService) {
+    $scope.messages = mlMessageBarService.messages;
+    $scope.removeMessage = mlMessageBarService.removeMessage;
+  })
 
-.directive('mlMessageBar', function () {
-  return {
-    restrict: 'AE',
-    template: require('plugins/ml/components/messagebar/messagebar.html')
-  };
+  .directive('mlMessageBar', function () {
+    return {
+      restrict: 'AE',
+      template
+    };
 
-});
+  });
 

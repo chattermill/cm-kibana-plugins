@@ -1,4 +1,5 @@
 import { set } from 'lodash';
+import { badRequest } from 'boom';
 import { WATCH_TYPES } from '../../../common/constants';
 import { JsonWatch } from './json_watch';
 import { MonitoringWatch } from './monitoring_watch';
@@ -16,28 +17,28 @@ export class Watch {
   }
 
   // from Kibana
-  static fromDownstreamJSON(json) {
+  static fromDownstreamJson(json) {
     if (!json.type) {
-      throw new Error('json argument must contain an type property');
+      throw badRequest('json argument must contain an type property');
     }
 
     const WatchType = WatchTypes[json.type];
     if (!WatchType) {
-      throw new Error(`Attempted to load unknown type ${json.type}`);
+      throw badRequest(`Attempted to load unknown type ${json.type}`);
     }
 
-    return WatchType.fromDownstreamJSON(json);
+    return WatchType.fromDownstreamJson(json);
   }
 
   // from Elasticsearch
-  static fromUpstreamJSON(json) {
+  static fromUpstreamJson(json) {
     if (!json.watchJson) {
-      throw new Error('json argument must contain a watchJson property');
+      throw badRequest('json argument must contain a watchJson property');
     }
 
     const type = getWatchType(json.watchJson);
     const WatchType = WatchTypes[type];
 
-    return WatchType.fromUpstreamJSON(json);
+    return WatchType.fromUpstreamJson(json);
   }
-};
+}

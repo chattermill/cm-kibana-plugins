@@ -1,54 +1,94 @@
 import React from 'react';
 import { formatNumber } from 'plugins/monitoring/lib/format_number';
-import { KuiKeyboardAccessible } from 'ui_framework/components';
 import { ClusterItemContainer, BytesPercentageUsage } from './helpers';
 import { Tooltip } from 'plugins/monitoring/components/tooltip';
+
+import {
+  EuiFlexGrid,
+  EuiFlexItem,
+  EuiLink,
+  EuiTitle,
+  EuiPanel,
+  EuiDescriptionList,
+  EuiDescriptionListTitle,
+  EuiDescriptionListDescription,
+  EuiHorizontalRule,
+} from '@elastic/eui';
 
 export function LogstashPanel(props) {
   if (!props.node_count) {
     return null;
   }
 
-  const goToLogstash = () => props.angularChangeUrl('logstash');
-  const goToNodes = () => props.angularChangeUrl('logstash/nodes');
-  const goToPipelines = () => props.angularChangeUrl('logstash/pipelines');
+  const goToLogstash = () => props.changeUrl('logstash');
+  const goToNodes = () => props.changeUrl('logstash/nodes');
+  const goToPipelines = () => props.changeUrl('logstash/pipelines');
 
   return (
-    <ClusterItemContainer { ...props } url="logstash" title="Logstash">
-      <div className="row">
-        <div className="col-md-4">
-          <dl data-test-subj="logstash_overview">
-            <dt className="cluster-panel__inner-title">
-              <KuiKeyboardAccessible>
-                <a className="kuiLink" onClick={ goToLogstash } >
+    <ClusterItemContainer {...props} url="logstash" title="Logstash">
+      <EuiFlexGrid columns={3}>
+        <EuiFlexItem>
+          <EuiPanel paddingSize="m">
+            <EuiTitle size="s">
+              <h3>
+                <EuiLink
+                  onClick={goToLogstash}
+                  aria-label="Logstash Overview"
+                >
                   Overview
-                </a>
-              </KuiKeyboardAccessible>
-            </dt>
-            <dd>Events Received: { formatNumber(props.events_in_total, '0.[0]a') }</dd>
-            <dd>Events Emitted: { formatNumber(props.events_out_total, '0.[0]a') }</dd>
-          </dl>
-        </div>
-        <div className="col-md-4">
-          <dl>
-            <dt className="cluster-panel__inner-title">
-              <KuiKeyboardAccessible>
-                <a className="kuiLink" onClick={ goToNodes } >
+                </EuiLink>
+              </h3>
+            </EuiTitle>
+            <EuiHorizontalRule margin="m" />
+            <EuiDescriptionList type="column" data-test-subj="logstash_overview">
+              <EuiDescriptionListTitle>Events Received</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="lsEventsReceived">
+                { formatNumber(props.events_in_total, '0.[0]a') }
+              </EuiDescriptionListDescription>
+              <EuiDescriptionListTitle>Events Emitted</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="lsEventsEmitted">
+                { formatNumber(props.events_out_total, '0.[0]a') }
+              </EuiDescriptionListDescription>
+            </EuiDescriptionList>
+          </EuiPanel>
+        </EuiFlexItem>
+
+        <EuiFlexItem>
+          <EuiPanel paddingSize="m">
+            <EuiTitle size="s">
+              <h3>
+                <EuiLink
+                  onClick={goToNodes}
+                  data-test-subj="lsNodes"
+                  aria-label={`Logstash Nodes: ${ props.node_count}`}
+                >
                   Nodes: <span data-test-subj="number_of_logstash_instances">{ props.node_count }</span>
-                </a>
-              </KuiKeyboardAccessible>
-            </dt>
-            <dd>Uptime: { formatNumber(props.max_uptime, 'time_since') }</dd>
-            <dd>
-              JVM Heap: <BytesPercentageUsage usedBytes={ props.avg_memory_used } maxBytes={ props.avg_memory } />
-            </dd>
-          </dl>
-        </div>
-        <div className="col-md-4">
-          <dl>
-            <dt className="cluster-panel__inner-title">
-              <KuiKeyboardAccessible>
-                <a className="link" onClick={ goToPipelines } >
+                </EuiLink>
+              </h3>
+            </EuiTitle>
+            <EuiHorizontalRule margin="m" />
+            <EuiDescriptionList type="column">
+              <EuiDescriptionListTitle>Uptime</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="lsUptime">
+                { formatNumber(props.max_uptime, 'time_since') }
+              </EuiDescriptionListDescription>
+              <EuiDescriptionListTitle>JVM Heap</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="lsJvmHeap">
+                <BytesPercentageUsage usedBytes={props.avg_memory_used} maxBytes={props.avg_memory} />
+              </EuiDescriptionListDescription>
+            </EuiDescriptionList>
+          </EuiPanel>
+        </EuiFlexItem>
+
+        <EuiFlexItem>
+          <EuiPanel paddingSize="m">
+            <EuiTitle size="s">
+              <h3>
+                <EuiLink
+                  onClick={goToPipelines}
+                  data-test-subj="lsPipelines"
+                  aria-label={`Logstash Pipelines (beta feature): ${ props.pipeline_count }`}
+                >
                   <Tooltip
                     text="Beta Feature"
                     placement="bottom"
@@ -57,12 +97,13 @@ export function LogstashPanel(props) {
                     <span className="kuiIcon fa-flask betaIcon" />
                   </Tooltip>
                   Pipelines: <span data-test-subj="number_of_logstash_pipelines">{ props.pipeline_count }</span>
-                </a>
-              </KuiKeyboardAccessible>
-            </dt>
-          </dl>
-        </div>
-      </div>
+                </EuiLink>
+              </h3>
+            </EuiTitle>
+            <EuiHorizontalRule margin="m" />
+          </EuiPanel>
+        </EuiFlexItem>
+      </EuiFlexGrid>
     </ClusterItemContainer>
   );
 }

@@ -3,7 +3,7 @@ import moment from 'moment';
 import { checkParam } from '../error_missing_required';
 import { createQuery } from '../create_query';
 import { calculateAvailability } from '../calculate_availability';
-import { ElasticsearchMetric } from '../metrics/metric_classes';
+import { ElasticsearchMetric } from '../metrics';
 
 /*
  * Get detailed info for Logstash's in the cluster
@@ -16,20 +16,25 @@ import { ElasticsearchMetric } from '../metrics/metric_classes';
  *  - events
  *  - config reloads
  */
-export function getNodes(req, logstashIndexPattern) {
-  checkParam(logstashIndexPattern, 'logstashIndexPattern in getNodes');
+export function getNodes(req, lsIndexPattern, { clusterUuid }) {
+  checkParam(lsIndexPattern, 'lsIndexPattern in getNodes');
 
   const config = req.server.config();
   const start = moment.utc(req.payload.timeRange.min).valueOf();
   const end = moment.utc(req.payload.timeRange.max).valueOf();
-  const uuid = req.params.clusterUuid;
-  const metric = ElasticsearchMetric.getMetricFields();
+
   const params = {
-    index: logstashIndexPattern,
+    index: lsIndexPattern,
     ignoreUnavailable: true,
     body: {
-      size: config.get('xpack.monitoring.max_bucket_size'),
-      query: createQuery({ start, end, uuid, metric, type: 'logstash_stats' }),
+      size: config.get('xpack.monitoring.max_bucket_size'), // FIXME
+      query: createQuery({
+        start,
+        end,
+        clusterUuid,
+        metric: ElasticsearchMetric.getMetricFields(),
+        type: 'logstash_stats'
+      }),
       collapse: {
         field: 'logstash_stats.logstash.uuid'
       },
@@ -48,21 +53,22 @@ export function getNodes(req, logstashIndexPattern) {
         'logstash_stats.logstash.uuid',
         'logstash_stats.logstash.status',
         'logstash_stats.logstash.pipeline',
-        'logstash_stats.reloads'
+        'logstash_stats.reloads',
+        'logstash_stats.logstash.version'
       ]
     }
   };
 
   const { callWithRequest } = req.server.plugins.elasticsearch.getCluster('monitoring');
   return callWithRequest(req, 'search', params)
-  .then(resp => {
-    const instances = get(resp, 'hits.hits', []);
+    .then(resp => {
+      const instances = get(resp, 'hits.hits', []);
 
-    return instances.map(hit => {
-      return {
-        ...get(hit, '_source.logstash_stats'),
-        availability: calculateAvailability(get(hit, '_source.timestamp'))
-      };
+      return instances.map(hit => {
+        return {
+          ...get(hit, '_source.logstash_stats'),
+          availability: calculateAvailability(get(hit, '_source.timestamp'))
+        };
+      });
     });
-  });
-};
+}

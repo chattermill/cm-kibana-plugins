@@ -10,6 +10,9 @@ export const config = (Joi) => {
   const DEFAULT_REQUEST_HEADERS = [ 'authorization' ];
 
   return object({
+    ccs: object({
+      enabled: boolean().default(true)
+    }).default(),
     enabled: boolean().default(true),
     ui: object({
       enabled: boolean().default(true),
@@ -27,11 +30,14 @@ export const config = (Joi) => {
       index_pattern: string().default('.monitoring-kibana-2-*,.monitoring-kibana-6-*'),
       collection: object({
         enabled: boolean().default(true),
-        interval: number().default(10000)
+        interval: number().default(10000) // op status metrics get buffered at `ops.interval` and flushed to the bulk endpoint at this interval
       }).default()
     }).default(),
     logstash: object({
       index_pattern: string().default('.monitoring-logstash-2-*,.monitoring-logstash-6-*')
+    }).default(),
+    beats: object({
+      index_pattern: string().default('.monitoring-beats-6-*')
     }).default(),
     cluster_alerts: object({
       enabled: boolean().default(true),
@@ -48,8 +54,8 @@ export const config = (Joi) => {
     node_resolver: string().valid('uuid').default('uuid'), // deprecated in 5.6; we can make them set it properly before we remove it
     stats_report_url: Joi.when('$dev', { // `when` can't be deconstructed
       is: true,
-      then: string().default('../api/monitoring/v1/phone-home'),
-      otherwise: string().default('https://marvel-stats.elasticsearch.com/appdata/marvelOpts')
+      then: string().default('https://telemetry-staging.elastic.co/xpack/v1/send'),
+      otherwise: string().default('https://telemetry.elastic.co/xpack/v1/send')
     }),
     agent: object({
       interval: string().regex(/[\d\.]+[yMwdhms]/).default('10s')

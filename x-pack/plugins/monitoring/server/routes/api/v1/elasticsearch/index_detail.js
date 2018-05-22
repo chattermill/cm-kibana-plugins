@@ -1,14 +1,11 @@
-import { get, forEach } from 'lodash';
-import Promise from 'bluebird';
+import { get } from 'lodash';
 import Joi from 'joi';
 import { getClusterStats } from '../../../../lib/cluster/get_cluster_stats';
-import { getClusterStatus } from '../../../../lib/cluster/get_cluster_status';
-import { calculateClusterShards } from '../../../../lib/cluster/calculate_cluster_shards';
-import { getIndexSummary } from '../../../../lib/elasticsearch/get_index_summary';
-import { getShardStats } from '../../../../lib/elasticsearch/get_shard_stats';
-import { getShardAllocation } from '../../../../lib/elasticsearch/get_shard_allocation';
+import { getIndexSummary } from '../../../../lib/elasticsearch/indices';
 import { getMetrics } from '../../../../lib/details/get_metrics';
-import { handleError } from '../../../../lib/handle_error';
+import { getShardAllocation, getShardStats } from '../../../../lib/elasticsearch/shards';
+import { handleError } from '../../../../lib/errors/handle_error';
+import { prefixIndexPattern } from '../../../../lib/ccs_utils';
 
 export function indexRoutes(server) {
 
@@ -22,68 +19,65 @@ export function indexRoutes(server) {
           id: Joi.string().required()
         }),
         payload: Joi.object({
+          ccs: Joi.string().optional(),
           timeRange: Joi.object({
             min: Joi.date().required(),
             max: Joi.date().required()
           }).required(),
           metrics: Joi.array().required(),
-          shards: Joi.boolean().default(true)
+          shards: Joi.boolean().default(true) // false for Advanced view
         })
       }
     },
-    handler: (req, reply) => {
-      const clusterUuid = req.params.clusterUuid;
-      const indexUuid = req.params.id;
-      const start = req.payload.timeRange.min;
-      const end = req.payload.timeRange.max;
-      const collectShards = req.payload.shards;
-      const config = req.server.config();
-      const esIndexPattern = config.get('xpack.monitoring.elasticsearch.index_pattern');
+    handler: async (req, reply) => {
+      try {
+        const config = server.config();
+        const ccs = req.payload.ccs;
+        const clusterUuid = req.params.clusterUuid;
+        const indexUuid = req.params.id;
+        const start = req.payload.timeRange.min;
+        const end = req.payload.timeRange.max;
+        const esIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.elasticsearch.index_pattern', ccs);
+        const collectShards = req.payload.shards; // for advanced view
 
-      return getClusterStats(req, esIndexPattern, clusterUuid)
-      .then(cluster => {
+        const cluster = await getClusterStats(req, esIndexPattern, clusterUuid);
         const showSystemIndices = true; // hardcode to true, because this could be a system index
-        let shards;
+
+        const shardStats = await getShardStats(req, esIndexPattern, cluster, { includeNodes: true, includeIndices: true });
+        const indexSummary = await getIndexSummary(req, esIndexPattern, shardStats, { clusterUuid, indexUuid, start, end });
+        const metrics = await getMetrics(req, esIndexPattern, [{ term: { 'index_stats.index': indexUuid } }]);
+
+        let shardAllocation;
         if (collectShards) {
-          shards = getShardAllocation(req, esIndexPattern, [{ term: { 'shard.index': indexUuid } }], cluster, showSystemIndices);
-        }
-        return Promise.props({
-          clusterStatus: getClusterStatus(cluster),
-          indexSummary:  getIndexSummary(req, esIndexPattern, { clusterUuid, indexUuid, start, end }),
-          metrics: getMetrics(req, esIndexPattern, [{ term: { 'index_stats.index': indexUuid } }]),
-          shards,
-          shardStats: getShardStats(req, esIndexPattern, cluster)
-        });
-      })
-      .then(calculateClusterShards)
-      .then(body => {
-        const shardStats = body.shardStats.indices[indexUuid];
-        // check if we need a legacy workaround for Monitoring 2.0 node data
-        if (shardStats) {
-          body.indexSummary.unassignedShards = shardStats.unassigned.primary + shardStats.unassigned.replica;
-          body.indexSummary.totalShards = shardStats.primary + shardStats.replica + body.indexSummary.unassignedShards;
-          body.indexSummary.status = shardStats.status;
-          body.indexSummary.shardStats = shardStats;
-        } else {
-          body.indexSummary.status = 'Not Available';
-          body.indexSummary.totalShards = 'N/A';
-          body.indexSummary.unassignedShards = 'N/A';
-          body.indexSummary.documents = 'N/A';
-          body.indexSummary.dataSize = {
-            primaries: 'N/A',
-            total: 'N/A'
+          // TODO: Why so many fields needed for a single component (shard legend)?
+          const shardFilter = { term: { 'shard.index': indexUuid } };
+          const stateUuid = get(cluster, 'cluster_state.state_uuid');
+          const allocationOptions = {
+            nodeResolver: config.get('xpack.monitoring.node_resolver'),
+            shardFilter,
+            stateUuid,
+            showSystemIndices,
+          };
+          const shards = await getShardAllocation(req, esIndexPattern, allocationOptions);
+
+          shardAllocation = {
+            shards,
+            shardStats: { nodes: shardStats.nodes },
+            nodes: shardStats.nodes, // for identifying nodes that shard relocates to
+            stateUuid, // for debugging/troubleshooting
           };
         }
-        const shardNodes = get(body, 'shardStats.nodes');
-        body.nodes = {};
-        forEach(shardNodes, (shardNode, resolver) => {
-          body.nodes[resolver] = shardNode;
+
+        reply({
+          indexSummary,
+          metrics,
+          ...shardAllocation,
         });
-        return body;
-      })
-      .then(reply)
-      .catch(err => reply(handleError(err, req)));
+
+      } catch (err) {
+        reply(handleError(err, req));
+      }
     }
   });
 
-};
+}

@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import routes from 'ui/routes';
 import template from './account.html';
+import '../management/change_password_form/change_password_form';
 import './account.less';
 import '../../services/shield_user';
 import { GateKeeperProvider } from 'plugins/xpack_main/services/gate_keeper';
@@ -31,14 +32,14 @@ routes.when('/account', {
       }
 
       $scope.user.$changePassword()
-      .then(() => notifier.info('The password has been changed.'))
-      .then(onSuccess)
-      .catch(error => {
-        if (error.status === 401) {
-          onIncorrectPassword();
-        }
-        else notifier.error(_.get(error, 'data.message'));
-      });
+        .then(() => notifier.info('The password has been changed.'))
+        .then(onSuccess)
+        .catch(error => {
+          if (error.status === 401) {
+            onIncorrectPassword();
+          }
+          else notifier.error(_.get(error, 'data.message'));
+        });
     };
 
     this.getEmail = () => {

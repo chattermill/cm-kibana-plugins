@@ -13,19 +13,19 @@
  * strictly prohibited.
  */
 
-import { getClient } from '../get_client_ml';
+import { callWithRequestFactory } from '../get_client_ml';
 import { wrapError } from '../errors';
 
 export function jobRoutes(server, commonRouteConfig) {
-  const callWithRequest = getClient(server).callWithRequest;
 
   server.route({
     method: 'GET',
     path: '/api/ml/anomaly_detectors',
     handler(request, reply) {
-      return callWithRequest(request, 'ml.jobs')
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      const callWithRequest = callWithRequestFactory(server, request);
+      return callWithRequest('ml.jobs')
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -36,10 +36,11 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'GET',
     path: '/api/ml/anomaly_detectors/{jobId}',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const jobId = request.params.jobId;
-      return callWithRequest(request, 'ml.jobs', { jobId })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.jobs', { jobId })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -50,9 +51,10 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'GET',
     path: '/api/ml/anomaly_detectors/_stats',
     handler(request, reply) {
-      return callWithRequest(request, 'ml.jobStats')
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      const callWithRequest = callWithRequestFactory(server, request);
+      return callWithRequest('ml.jobStats')
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -63,10 +65,11 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'GET',
     path: '/api/ml/anomaly_detectors/{jobId}/_stats',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const jobId = request.params.jobId;
-      return callWithRequest(request, 'ml.jobStats', { jobId })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.jobStats', { jobId })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -77,11 +80,12 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'PUT',
     path: '/api/ml/anomaly_detectors/{jobId}',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const jobId = request.params.jobId;
       const body = request.payload;
-      return callWithRequest(request, 'ml.addJob', { jobId, body })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.addJob', { jobId, body })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -92,11 +96,12 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'POST',
     path: '/api/ml/anomaly_detectors/{jobId}/_update',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const jobId = request.params.jobId;
       const body = request.payload;
-      return callWithRequest(request, 'ml.updateJob', { jobId, body })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.updateJob', { jobId, body })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -107,10 +112,11 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'POST',
     path: '/api/ml/anomaly_detectors/{jobId}/_open',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const jobId = request.params.jobId;
-      return callWithRequest(request, 'ml.openJob', { jobId })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.openJob', { jobId })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -121,10 +127,17 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'POST',
     path: '/api/ml/anomaly_detectors/{jobId}/_close',
     handler(request, reply) {
-      const jobId = request.params.jobId;
-      return callWithRequest(request, 'ml.closeJob', { jobId })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      const callWithRequest = callWithRequestFactory(server, request);
+      const options = {
+        jobId: request.params.jobId
+      };
+      const force = request.query.force;
+      if (force !== undefined) {
+        options.force = force;
+      }
+      return callWithRequest('ml.closeJob', options)
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -135,6 +148,7 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'DELETE',
     path: '/api/ml/anomaly_detectors/{jobId}',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const options = {
         jobId: request.params.jobId
       };
@@ -142,23 +156,9 @@ export function jobRoutes(server, commonRouteConfig) {
       if (force !== undefined) {
         options.force = force;
       }
-      return callWithRequest(request, 'ml.deleteJob', options)
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
-    },
-    config: {
-      ...commonRouteConfig
-    }
-  });
-
-  server.route({
-    method: 'UPDATE',
-    path: '/api/ml/anomaly_detectors/{jobId}',
-    handler(request, reply) {
-      const jobId = request.params.jobId;
-      return callWithRequest(request, 'ml.deleteJob', { jobId })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.deleteJob', options)
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig
@@ -169,10 +169,47 @@ export function jobRoutes(server, commonRouteConfig) {
     method: 'POST',
     path: '/api/ml/anomaly_detectors/_validate/detector',
     handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
       const body = request.payload;
-      return callWithRequest(request, 'ml.validateDetector', { body })
-      .then(resp => reply(resp))
-      .catch(resp => reply(wrapError(resp)));
+      return callWithRequest('ml.validateDetector', { body })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
+    },
+    config: {
+      ...commonRouteConfig
+    }
+  });
+
+  server.route({
+    method: 'POST',
+    path: '/api/ml/anomaly_detectors/{jobId}/_forecast',
+    handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
+      const jobId = request.params.jobId;
+      const duration = request.payload.duration;
+      return callWithRequest('ml.forecast', { jobId, duration })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
+    },
+    config: {
+      ...commonRouteConfig
+    }
+  });
+
+  server.route({
+    method: 'POST',
+    path: '/api/ml/anomaly_detectors/{jobId}/results/overall_buckets',
+    handler(request, reply) {
+      const callWithRequest = callWithRequestFactory(server, request);
+      return callWithRequest('ml.overallBuckets', {
+        jobId: request.params.jobId,
+        top_n: request.payload.topN,
+        bucket_span: request.payload.bucketSpan,
+        start: request.payload.start,
+        end: request.payload.end
+      })
+        .then(resp => reply(resp))
+        .catch(resp => reply(wrapError(resp)));
     },
     config: {
       ...commonRouteConfig

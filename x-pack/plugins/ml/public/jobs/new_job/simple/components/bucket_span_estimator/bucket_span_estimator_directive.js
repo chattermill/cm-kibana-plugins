@@ -17,7 +17,8 @@ import _ from 'lodash';
 
 import template from './bucket_span_estimator.html';
 import { BucketSpanEstimatorProvider } from './bucket_span_estimator';
-import { getQueryFromSavedSearch } from 'plugins/ml/jobs/new_job/simple/components/utils/simple_job_utils';
+import { getQueryFromSavedSearch } from 'plugins/ml/jobs/new_job/utils/new_job_utils';
+import { EVENT_RATE_COUNT_FIELD } from 'plugins/ml/jobs/new_job/simple/components/constants/general';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
@@ -25,6 +26,7 @@ const module = uiModules.get('apps/ml');
 module.directive('mlBucketSpanEstimator', function ($injector) {
   const Private = $injector.get('Private');
   const es = $injector.get('es');
+  const $q = $injector.get('$q');
 
   return {
     restrict: 'AE',
@@ -34,12 +36,12 @@ module.directive('mlBucketSpanEstimator', function ($injector) {
       formConfig: '=',
       jobStateWrapper: '=',
       JOB_STATE: '=jobState',
-      ui: '=ui'
+      ui: '=ui',
+      exportedFunctions: '='
     },
     template,
     link: function ($scope) {
       const BucketSpanEstimator = Private(BucketSpanEstimatorProvider);
-      $scope.jobState = $scope.jobStateWrapper.jobState;
       const STATUS = {
         FAILED: -1,
         NOT_RUNNING: 0,
@@ -57,7 +59,7 @@ module.directive('mlBucketSpanEstimator', function ($injector) {
           start: $scope.formConfig.start,
           end: $scope.formConfig.end
         };
-        const splitField = $scope.formConfig.splitField;
+        const splitField = $scope.formConfig.splitField !== undefined ? $scope.formConfig.splitField.name : undefined;
         let splitFieldValues = [];
 
         const query = getQueryFromSavedSearch($scope.formConfig);
@@ -65,13 +67,13 @@ module.directive('mlBucketSpanEstimator', function ($injector) {
         if ($scope.formConfig.fields === undefined) {
           // single metric config
           const fieldName = ($scope.formConfig.field === null) ?
-            null : $scope.formConfig.field.id;
+            null : $scope.formConfig.field.name;
           fields.push(fieldName);
           aggTypes.push($scope.formConfig.agg.type);
         } else {
           // multi metric config
-          _.each($scope.formConfig.fields, (field, key) => {
-            const fieldName = (key === '__ml_event_rate_count__') ? null : key;
+          _.each($scope.formConfig.fields, (field) => {
+            const fieldName = (field.id === EVENT_RATE_COUNT_FIELD) ? null : field.name;
             fields.push(fieldName);
             aggTypes.push(field.agg.type);
           });
@@ -79,26 +81,25 @@ module.directive('mlBucketSpanEstimator', function ($injector) {
 
         // a partition has been selected, so we need to load some field values to use in the
         // bucket span tests.
-        if (splitField !== undefined && splitField !== '--No split--') {
+        if (splitField !== undefined) {
           getRandomFieldValues($scope.formConfig.indexPattern.title, splitField, query)
-          .then((resp) => {
-            splitFieldValues = resp;
-            createBucketSpanEstimator(
-              $scope.formConfig.indexPattern.title,
-              $scope.formConfig.timeField,
-              aggTypes,
-              fields,
-              duration,
-              query,
-              splitField,
-              splitFieldValues);
-          })
-          .catch((resp) => {
-            console.log('Bucket span could not be estimated', resp);
-            $scope.ui.bucketSpanEstimator.status = STATUS.FAILED;
-            $scope.ui.bucketSpanEstimator.message = 'Bucket span could not be estimated';
-            $scope.$applyAsync();
-          });
+            .then((resp) => {
+              splitFieldValues = resp;
+              createBucketSpanEstimator(
+                $scope.formConfig.indexPattern.title,
+                $scope.formConfig.timeField,
+                aggTypes,
+                fields,
+                duration,
+                query,
+                splitField,
+                splitFieldValues);
+            })
+            .catch((resp) => {
+              console.log('Bucket span could not be estimated', resp);
+              $scope.ui.bucketSpanEstimator.status = STATUS.FAILED;
+              $scope.ui.bucketSpanEstimator.message = 'Bucket span could not be estimated';
+            });
         } else {
           // no partition field selected or we're in the single metric config
           createBucketSpanEstimator(
@@ -113,6 +114,12 @@ module.directive('mlBucketSpanEstimator', function ($injector) {
         }
 
       };
+
+      // export the guessBucketSpan function so it can be called from outside this directive.
+      // this is used when auto populating the settings from the URL.
+      if ($scope.exportedFunctions !== undefined && typeof $scope.exportedFunctions === 'object') {
+        $scope.exportedFunctions.guessBucketSpan = $scope.guessBucketSpan;
+      }
 
       function createBucketSpanEstimator(
         indexPatternId,
@@ -133,90 +140,88 @@ module.directive('mlBucketSpanEstimator', function ($injector) {
           splitField,
           splitFieldValues);
 
-        bss.run()
-        .then((interval) => {
-          const notify = ($scope.formConfig.bucketSpan !== interval.name);
-          $scope.formConfig.bucketSpan = interval.name;
-          $scope.$applyAsync();
-          $scope.ui.bucketSpanEstimator.status = STATUS.FINISHED;
-          if (notify && typeof $scope.bucketSpanFieldChange === 'function') {
-            $scope.bucketSpanFieldChange();
-          }
-        })
-        .catch((resp) => {
-          console.log('Bucket span could not be estimated', resp);
-          $scope.ui.bucketSpanEstimator.status = STATUS.FAILED;
-          $scope.ui.bucketSpanEstimator.message = 'Bucket span could not be estimated';
-          $scope.$applyAsync();
-        });
+        $q.when(bss.run())
+          .then((interval) => {
+            const notify = ($scope.formConfig.bucketSpan !== interval.name);
+            $scope.formConfig.bucketSpan = interval.name;
+            $scope.ui.bucketSpanEstimator.status = STATUS.FINISHED;
+            if (notify && typeof $scope.bucketSpanFieldChange === 'function') {
+              $scope.bucketSpanFieldChange();
+            }
+          })
+          .catch((resp) => {
+            console.log('Bucket span could not be estimated', resp);
+            $scope.ui.bucketSpanEstimator.status = STATUS.FAILED;
+            $scope.ui.bucketSpanEstimator.message = 'Bucket span could not be estimated';
+          });
       }
 
       function getRandomFieldValues(index, field, query) {
         let fieldValues = [];
-        return new Promise((resolve, reject) => {
+        return $q((resolve, reject) => {
           const NUM_PARTITIONS = 10;
           // use a partitioned search to load 10 random fields
           // load ten fields, to test that there are at least 10.
           getFieldCardinality(index, field)
-          .then((value) => {
-            const numPartitions = (Math.floor(value / NUM_PARTITIONS)) || 1;
-            es.search({
-              index,
-              size: 0,
-              body: {
-                query,
-                aggs: {
-                  fields_bucket_counts: {
-                    terms: {
-                      field,
-                      include: {
-                        partition: 0,
-                        num_partitions: numPartitions
+            .then((value) => {
+              const numPartitions = (Math.floor(value / NUM_PARTITIONS)) || 1;
+              es.search({
+                index,
+                size: 0,
+                body: {
+                  query,
+                  aggs: {
+                    fields_bucket_counts: {
+                      terms: {
+                        field,
+                        include: {
+                          partition: 0,
+                          num_partitions: numPartitions
+                        }
                       }
                     }
                   }
                 }
-              }
+              })
+                .then((partitionResp) => {
+                  if(_.has(partitionResp, 'aggregations.fields_bucket_counts.buckets')) {
+                    const buckets = partitionResp.aggregations.fields_bucket_counts.buckets;
+                    fieldValues = _.map(buckets, b => b.key);
+                  }
+                  resolve(fieldValues);
+                })
+                .catch((partitionResp) => {
+                  reject(partitionResp);
+                });
             })
-            .then((partionResp) => {
-              if(_.has(partionResp, 'aggregations.fields_bucket_counts.buckets')) {
-                const buckets = partionResp.aggregations.fields_bucket_counts.buckets;
-                fieldValues = _.map(buckets, b => b.key);
-              }
-              resolve(fieldValues);
-            })
-            .catch((partionResp) => {
-              reject(partionResp);
+            .catch((resp) => {
+              reject(resp);
             });
-          })
-          .catch((resp) => {
-            reject(resp);
-          });
         });
       }
 
       function getFieldCardinality(index, field) {
-        return new Promise((resolve, reject) => {
+        return $q((resolve, reject) => {
           es.search({
             index,
             size: 0,
             body: {
-              aggs : {
-                field_count : {
-                  cardinality : {
+              aggs: {
+                field_count: {
+                  cardinality: {
                     field,
                   }
                 }
               }
             }
           })
-          .then((resp) => {
-            const value = _.get(resp, ['aggregations', 'field_count', 'value'], 0);
-            resolve(value);
-          })
-          .catch((resp) => {
-            reject(resp);
-          });
+            .then((resp) => {
+              const value = _.get(resp, ['aggregations', 'field_count', 'value'], 0);
+              resolve(value);
+            })
+            .catch((resp) => {
+              reject(resp);
+            });
         });
       }
     }

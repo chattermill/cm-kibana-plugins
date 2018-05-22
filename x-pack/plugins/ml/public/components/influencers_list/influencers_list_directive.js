@@ -22,7 +22,9 @@ import _ from 'lodash';
 import 'plugins/ml/lib/angular_bootstrap_patch';
 import 'plugins/ml/filters/abbreviate_whole_number';
 
+import template from './influencers_list.html';
 import { getSeverity } from 'plugins/ml/util/anomaly_utils';
+import { mlEscape } from 'plugins/ml/util/string_utils';
 
 import { FilterManagerProvider } from 'ui/filter_manager';
 
@@ -35,7 +37,7 @@ module.directive('mlInfluencersList', function (Private) {
 
   function link(scope, element) {
 
-    scope.$on('render',function () {
+    scope.$on('render', function () {
       render();
     });
 
@@ -55,13 +57,14 @@ module.directive('mlInfluencersList', function (Private) {
       // TODO - position tooltip so it doesn't go off edge of window.
       const compiledTooltip = _.template(
         '<div class="ml-influencers-list-tooltip"><%= influencerFieldName %>: <%= influencerFieldValue %>' +
-        '<hr/>Max anomaly score: <%= maxScoreValue %>' +
-        '<hr/>Total anomaly score: <%= totalScoreValue %></div>');
+        '<hr/>Max anomaly score: <%= maxScoreLabel %>' +
+        '<hr/>Total anomaly score: <%= totalScoreLabel %></div>');
 
       _.each(scope.influencersData, (fieldValues, influencerFieldName) => {
         const valuesForViewBy = [];
 
         _.each(fieldValues, function (valueData) {
+          const influencerFieldValue = valueData.influencerFieldValue;
           const maxScorePrecise = valueData.maxAnomalyScore;
           const maxScore = parseInt(maxScorePrecise);
           const totalScore = parseInt(valueData.sumAnomalyScore);
@@ -76,18 +79,17 @@ module.directive('mlInfluencersList', function (Private) {
           // ngRepeat directive could not be relied upon to be the same as they were
           // returned in the ES aggregation e.g. for numeric keys from a mlcategory influencer.
           valuesForViewBy.push({
-            'influencerFieldValue': valueData.influencerFieldValue,
-            'maxScorePrecise': maxScorePrecise,
-            'barScore': barScore,
-            'maxScoreLabel': maxScoreLabel,
-            'totalScore': totalScore,
-            'severity': severity,
-            'tooltip': compiledTooltip({
-              'influencerFieldName':influencerFieldName,
-              'influencerFieldValue':valueData.influencerFieldValue,
-
-              'maxScoreValue':maxScoreLabel,
-              'totalScoreValue':totalScoreLabel
+            influencerFieldValue,
+            maxScorePrecise,
+            barScore,
+            maxScoreLabel,
+            totalScore,
+            severity,
+            tooltip: compiledTooltip({
+              influencerFieldName: mlEscape(influencerFieldName),
+              influencerFieldValue: mlEscape(influencerFieldValue),
+              maxScoreLabel,
+              totalScoreLabel
             })
           });
         });
@@ -116,7 +118,7 @@ module.directive('mlInfluencersList', function (Private) {
       indexPatternId: '=',
       tooltipPlacement: '@'
     },
-    template: require('plugins/ml/components/influencers_list/influencers_list.html'),
+    template,
     link: link
   };
 });

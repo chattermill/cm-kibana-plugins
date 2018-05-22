@@ -13,6 +13,51 @@
  * strictly prohibited.
  */
 
+import d3 from 'd3';
+import { calculateTextWidth } from 'plugins/ml/util/string_utils';
+import moment from 'moment';
+
+const MAX_LABEL_WIDTH = 100;
+
+export function chartLimits(data = []) {
+  const limits = { max: 0, min: 0 };
+
+  limits.max = d3.max(data, (d) => d.value);
+  limits.min = d3.min(data, (d) => d.value);
+  if (limits.max === limits.min) {
+    limits.max = d3.max(data, (d) => {
+      if (d.typical) {
+        return Math.max(d.value, d.typical);
+      } else {
+        // If analysis with by and over field, and more than one cause,
+        // there will be no actual and typical value.
+        // TODO - produce a better visual for population analyses.
+        return d.value;
+      }
+    });
+    limits.min = d3.min(data, (d) => {
+      if (d.typical) {
+        return Math.min(d.value, d.typical);
+      } else {
+        // If analysis with by and over field, and more than one cause,
+        // there will be no actual and typical value.
+        // TODO - produce a better visual for population analyses.
+        return d.value;
+      }
+    });
+  }
+
+  // add padding of 5% of the difference between max and min
+  // if we ended up with the same value for both of them
+  if (limits.max === limits.min) {
+    const padding = limits.max * 0.05;
+    limits.max += padding;
+    limits.min -= padding;
+  }
+
+  return limits;
+}
+
 export function drawLineChartDots(data, lineChartGroup, lineChartValuesLine, radius = 1.5) {
   // We need to do this because when creating a line for a chart which has data gaps,
   // if there are single datapoints without any valid data before and after them,
@@ -52,4 +97,39 @@ export function drawLineChartDots(data, lineChartGroup, lineChartValuesLine, rad
     .attr('cy', lineChartValuesLine.y());
 
   dots.exit().remove();
+}
+
+// this replicates Kibana's filterAxisLabels() behavior
+// which can be found in ui/vislib/lib/axis/axis_labels.js
+// axis labels which overflow the chart's boundaries will be removed
+export function filterAxisLabels(selection, chartWidth) {
+  if (selection === undefined || selection.selectAll === undefined) {
+    throw new Error('Missing selection parameter');
+  }
+
+  selection.selectAll('.tick text')
+    // don't refactor this to an arrow function because
+    // we depend on using `this` here.
+    .text(function () {
+      const parent = d3.select(this.parentNode);
+      const labelWidth = parent.node().getBBox().width;
+      const labelXPos = d3.transform(parent.attr('transform')).translate[0];
+      const minThreshold = labelXPos - (labelWidth / 2);
+      const maxThreshold = labelXPos + (labelWidth / 2);
+      if (minThreshold >= 0 && maxThreshold <= chartWidth) {
+        return this.textContent;
+      } else {
+        parent.remove();
+      }
+    });
+}
+
+export function numTicks(axisWidth) {
+  return axisWidth / MAX_LABEL_WIDTH;
+}
+
+export function numTicksForDateFormat(axisWidth, dateFormat) {
+  // Allow 1.75 times the width of a formatted date per tick for padding.
+  const tickWidth = calculateTextWidth(moment().format(dateFormat), false);
+  return axisWidth / (1.75 * tickWidth);
 }

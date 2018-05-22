@@ -24,19 +24,10 @@ export function nodesByIndices() {
 
     const getNodeType = function (node) {
       const attrs = node.attributes || {};
-      if (attrs.client === 'true') {
-        return 'client';
-      }
-      if (attrs.data === 'false') {
-        return attrs.master === 'true' ? 'master' : 'client';
-      }
-      if (attrs.master === 'false') {
-        // we know data is true here..
-        return 'data';
-      }
-      return 'normal';
+      return attrs.master === 'true' ? 'master' : 'normal';
     };
 
+    // NOTE: this seems to be used, but has no discrenable effect in the UI
     function createNode(obj, node, id) {
       node.type = 'node';
       node.children = [];
@@ -96,4 +87,4 @@ export function nodesByIndices() {
       })
       .value();
   };
-};
+}

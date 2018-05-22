@@ -2,7 +2,7 @@ import Promise from 'bluebird';
 import { chain, find, get } from 'lodash';
 import { checkParam } from '../error_missing_required';
 import { createQuery } from '../create_query.js';
-import { ElasticsearchMetric } from '../metrics/metric_classes';
+import { ElasticsearchMetric } from '../metrics';
 
 /*
  * Get high-level info for Kibanas in a set of clusters
@@ -37,7 +37,7 @@ export function getKibanasForClusters(req, kbnIndexPattern, clusters) {
           type: 'kibana_stats',
           start,
           end,
-          uuid: clusterUuid,
+          clusterUuid,
           metric
         }),
         aggs: {
@@ -156,45 +156,45 @@ export function getKibanasForClusters(req, kbnIndexPattern, clusters) {
 
     const { callWithRequest } = req.server.plugins.elasticsearch.getCluster('monitoring');
     return callWithRequest(req, 'search', params)
-    .then(result => {
-      const aggregations = get(result, 'aggregations', {});
-      const kibanaUuids =  get(aggregations, 'kibana_uuids.buckets', []);
-      const statusBuckets = get(aggregations, 'status.buckets', []);
+      .then(result => {
+        const aggregations = get(result, 'aggregations', {});
+        const kibanaUuids =  get(aggregations, 'kibana_uuids.buckets', []);
+        const statusBuckets = get(aggregations, 'status.buckets', []);
 
-      // everything is initialized such that it won't impact any rollup
-      let status = null;
-      let requestsTotal = 0;
-      let connections = 0;
-      let responseTime = 0;
-      let memorySize = 0;
-      let memoryLimit = 0;
+        // everything is initialized such that it won't impact any rollup
+        let status = null;
+        let requestsTotal = 0;
+        let connections = 0;
+        let responseTime = 0;
+        let memorySize = 0;
+        let memoryLimit = 0;
 
-      // if the cluster has kibana instances at all
-      if (kibanaUuids.length) {
+        // if the cluster has kibana instances at all
+        if (kibanaUuids.length) {
         // get instance status by finding the latest status bucket
-        const latestTimestamp = chain(statusBuckets).map(bucket => bucket.max_timestamp.value).max().value();
-        const latestBucket = find(statusBuckets, (bucket) => bucket.max_timestamp.value === latestTimestamp);
-        status = get(latestBucket, 'key');
+          const latestTimestamp = chain(statusBuckets).map(bucket => bucket.max_timestamp.value).max().value();
+          const latestBucket = find(statusBuckets, (bucket) => bucket.max_timestamp.value === latestTimestamp);
+          status = get(latestBucket, 'key');
 
-        requestsTotal = get(aggregations, 'requests_total.value');
-        connections = get(aggregations, 'concurrent_connections.value');
-        responseTime = get(aggregations, 'response_time_max.value');
-        memorySize = get(aggregations, 'memory_rss.value'); // resident set size
-        memoryLimit = get(aggregations, 'memory_heap_size_limit.value'); // max old space
-      }
-
-      return {
-        clusterUuid,
-        stats: {
-          status,
-          requests_total: requestsTotal,
-          concurrent_connections: connections,
-          response_time_max: responseTime,
-          memory_size: memorySize,
-          memory_limit: memoryLimit,
-          count: kibanaUuids.length
+          requestsTotal = get(aggregations, 'requests_total.value');
+          connections = get(aggregations, 'concurrent_connections.value');
+          responseTime = get(aggregations, 'response_time_max.value');
+          memorySize = get(aggregations, 'memory_rss.value'); // resident set size
+          memoryLimit = get(aggregations, 'memory_heap_size_limit.value'); // max old space
         }
-      };
-    });
+
+        return {
+          clusterUuid,
+          stats: {
+            status,
+            requests_total: requestsTotal,
+            concurrent_connections: connections,
+            response_time_max: responseTime,
+            memory_size: memorySize,
+            memory_limit: memoryLimit,
+            count: kibanaUuids.length
+          }
+        };
+      });
   });
-};
+}

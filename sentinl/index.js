@@ -24,12 +24,14 @@ export default function (kibana) {
   let requirements = ['kibana', 'elasticsearch'];
 
   // Siren: check if saved objects api exists.
-  const savedObjectsAPI = `${kibana.rootDir}/src/kibi_plugins/saved_objects_api`;
+  const savedObjectsAPI = `${kibana.rootDir}/src/siren_core_plugins/saved_objects_api`;
   if (fs.existsSync(savedObjectsAPI)) {
     requirements.push('saved_objects_api');
 
     // Siren: import saved objects api related libs.
-    const pathForLibs = `${kibana.rootDir}/plugins/sentinl/public/app.js`;
+    let pathForLibs = `${kibana.rootDir}/siren_plugins/sentinl/public/app.js`;
+    pathForLibs = fs.existsSync(pathForLibs) ? pathForLibs : `${kibana.rootDir}/plugins/sentinl/public/app.js`;
+
     const libsToImport = [
       'import \'./services/siren/saved_watchers/index\';',
       'import \'./services/siren/saved_users/index\';',
@@ -80,6 +82,8 @@ export default function (kibana) {
           'Option "sentinl.sentinl.results" was deprecated. Use "sentinl.es.results" instead!'
         )),
         es: Joi.object({
+          allow_no_indices: Joi.boolean().default(false),
+          ignore_unavailable: Joi.boolean().default(false),
           default_index: Joi.string().default('.kibana'),
           default_type: Joi.string().default('doc'),
           results: Joi.number().default(50),
@@ -175,12 +179,19 @@ export default function (kibana) {
           email: Joi.object({
             active: Joi.boolean().default(false),
             host: Joi.string().default('localhost'),
-            timeout: Joi.number().default(5000),
             user: Joi.string(),
             password: Joi.string(),
-            host: Joi.string(),
+            port: Joi.number().default(25),
+            domain: Joi.string(),
             ssl: Joi.boolean().default(false),
-            timeout: Joi.number().default(5000)
+            tls: Joi.boolean().default(false),
+            cert: Joi.object({
+              key: Joi.string(), // full system path
+              cert: Joi.string(), // full system path
+              ca: Joi.string(), // full system path
+            }),
+            authentication: Joi.array().default(['PLAIN', 'LOGIN', 'CRAM-MD5', 'XOAUTH2']),
+            timeout: Joi.number().default(5000),
           }).default(),
           slack: Joi.object({
             active: Joi.boolean().default(false),
@@ -198,6 +209,10 @@ export default function (kibana) {
             body: Joi.string().default('{{payload.watcher_id}}{payload.hits.total}}')
           }).default(),
           report: Joi.object({
+            debug: Joi.object({
+              headless: Joi.boolean().default(true),
+              devtools: Joi.boolean().default(false),
+            }).default(),
             search_guard: Joi.any().forbidden().error(new Error(
               'Option "report.search_guard" was deprecated. Use "report.authentication.mode.searchguard" instead!'
             )),
@@ -211,7 +226,7 @@ export default function (kibana) {
               'Option "report.tmp_path" is not needed anymore. Just delete it from config!'
             )),
             active: Joi.boolean().default(false),
-            executable_path: Joi.string().default('/usr/bin/chromium'),
+            executable_path: Joi.string(),
             authentication: Joi.object({
               enabled: Joi.boolean().default(false),
               mode: Joi.object({
@@ -232,8 +247,8 @@ export default function (kibana) {
                 landscape: Joi.boolean().default(true),
               }).default(),
               screenshot: Joi.object({
-                width: Joi.number().default(1280),
-                height: Joi.number().default(900),
+                width: Joi.number().default(1920),
+                height: Joi.number().default(1080),
               }).default(),
             }).default(),
             timeout: Joi.number().default(5000),

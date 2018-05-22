@@ -1,4 +1,5 @@
 import { set } from 'lodash';
+import { badRequest } from 'boom';
 import { getActionType } from '../../../common/lib/get_action_type';
 import { ACTION_TYPES } from '../../../common/constants';
 import { LoggingAction } from './logging_action';
@@ -18,20 +19,20 @@ export class Action {
   }
 
   // From Elasticsearch
-  static fromUpstreamJSON(json) {
+  static fromUpstreamJson(json) {
     if (!json.actionJson) {
-      throw new Error('json argument must contain an actionJson property');
+      throw badRequest('json argument must contain an actionJson property');
     }
 
     const type = getActionType(json.actionJson);
     const ActionType = ActionTypes[type] || UnknownAction;
-    return ActionType.fromUpstreamJSON(json);
+    return ActionType.fromUpstreamJson(json);
   }
 
   // From Kibana
-  static fromDownstreamJSON(json) {
+  static fromDownstreamJson(json) {
     const ActionType = ActionTypes[json.type] || UnknownAction;
 
-    return ActionType.fromDownstreamJSON(json);
+    return ActionType.fromDownstreamJson(json);
   }
-};
+}

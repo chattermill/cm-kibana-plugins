@@ -44,7 +44,7 @@ function getJSONParseError(json) {
   const parser = clarinet.parser();
   let firstError = undefined;
 
-    // generate a detailed error using the parser's state
+  // generate a detailed error using the parser's state
   function makeError(e) {
     let currentNL = 0;
     let nextNL = json.indexOf('\n');
@@ -55,14 +55,14 @@ function getJSONParseError(json) {
       ++line;
     }
     return {
-      snippet:json.substr(currentNL + 1, nextNL - currentNL - 1),
+      snippet: json.substr(currentNL + 1, nextNL - currentNL - 1),
       message: (e.message || '').split('\n', 1)[0],
-      line:parser.line,
-      column:parser.column
+      line: parser.line,
+      column: parser.column
     };
   }
 
-    // trigger the parse error
+  // trigger the parse error
   parser.onerror = e => {
     firstError = makeError(e);
     parser.close();

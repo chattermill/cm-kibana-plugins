@@ -13,8 +13,8 @@
  * strictly prohibited.
  */
 
- // copy of ui/public/directives/row.js
- // overridden to add the option for row expansion.
+// copy of ui/public/directives/row.js
+// overridden to add the option for row expansion.
 
 import $ from 'jquery';
 import _ from 'lodash';
@@ -35,7 +35,7 @@ module.directive('mlRows', function ($compile, getAppState, Private) {
 
         // TODO: It would be better to actually check the type of the field, but we don't have
         // access to it here. This may become a problem with the switch to BigNumber
-        if (_.isNumeric(contents)) {
+        if (_.isNumber(contents)) {
           $cell.addClass('numeric-value');
         }
 
@@ -111,8 +111,8 @@ module.directive('mlRows', function ($compile, getAppState, Private) {
             if (rowScope &&
                 rowScope.mouseenterRow !== undefined && typeof rowScope.mouseenterRow === 'function') {
               // Add mousenter and mouseleave events to the row
-              $tr.attr({ 'ng-mouseenter':'mouseenterRow($event)' });
-              $tr.attr({ 'ng-mouseleave':'mouseleaveRow($event)' });
+              $tr.attr({ 'ng-mouseenter': 'mouseenterRow($event)' });
+              $tr.attr({ 'ng-mouseleave': 'mouseleaveRow($event)' });
               $compile($tr)(rowScope);
             }
 

@@ -88,7 +88,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
       target_field_name: '',
       target_field_value: '',
       conditions_connective: 'or',
-      rule_conditions: [],
+      conditions: [],
       value_list: []
     };
   } else {
@@ -100,7 +100,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
   }
 
   $scope.ui = {
-    ruleAction:['filter_results'],
+    ruleAction: ['filter_results'],
     target_field_name: '',
     target_field_value: '',
     conditions_connective: ['or', 'and'],
@@ -108,7 +108,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
       condition_type: [{
         label: 'actual',
         value: 'numerical_actual'
-      },{
+      }, {
         label: 'typical',
         value: 'numerical_typical'
       }, {
@@ -123,7 +123,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
       field_value: '',
       condition: {
         operator: [{
-          label:'<',
+          label: '<',
           value: 'lt'
         }, {
           label: '>',
@@ -141,7 +141,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
   };
 
   $scope.addNewCondition = function () {
-    $scope.filter.rule_conditions.push({
+    $scope.filter.conditions.push({
       condition_type: 'numerical_actual',
       field_name: '',
       field_value: '',
@@ -153,7 +153,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
   };
 
   $scope.removeCondition = function (idx) {
-    $scope.filter.rule_conditions.splice(idx, 1);
+    $scope.filter.conditions.splice(idx, 1);
   };
 
 
@@ -180,7 +180,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
   $scope.save = function () {
     const filter = angular.copy($scope.filter);
 
-    if (!filter.rule_conditions.length) {
+    if (!filter.conditions.length) {
       return;
     }
     $scope.saveLock = true;
@@ -193,7 +193,7 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
       delete filter.target_field_value;
     }
 
-    _.each(filter.rule_conditions, (cond) => {
+    _.each(filter.conditions, (cond) => {
       delete cond.$$hashKey;
       if (cond.field_name === '') {
         delete cond.field_vname;
@@ -211,14 +211,14 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
     // and send it off for validation.
     // if it passes, add the filter to the real detector.
     const dtr = angular.copy($scope.detector);
-    if (dtr.detector_rules === undefined) {
-      dtr.detector_rules = [];
+    if (dtr.rules === undefined) {
+      dtr.rules = [];
     }
 
     if (index >= 0) {
-      dtr.detector_rules[index] = filter;
+      dtr.rules[index] = filter;
     } else {
-      dtr.detector_rules.push(filter);
+      dtr.rules.push(filter);
     }
 
     validate(dtr)
@@ -239,6 +239,6 @@ module.controller('MlDetectorFilterModal', function ($scope, $modalInstance, par
 
   $scope.cancel = function () {
     msgs.clear();
-    $modalInstance.dismiss('cancel');
+    $modalInstance.close();
   };
 });

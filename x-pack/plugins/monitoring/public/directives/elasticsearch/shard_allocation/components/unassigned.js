@@ -19,20 +19,22 @@ import _ from 'lodash';
 import React from 'react';
 import { Shard } from './shard';
 
-export const Unassigned = React.createClass({
-  displayName: 'Unassigned',
-  createShard: function (shard) {
+export class Unassigned extends React.Component {
+  static displayName = 'Unassigned';
+
+  createShard = (shard) => {
     const type = shard.primary ? 'primary' : 'replica';
     const additionId = shard.state === 'UNASSIGNED' ? Math.random() : '';
     const key = shard.index + '.' + shard.node + '.' + type + '.' + shard.state + '.' + shard.shard + additionId;
-    return (<Shard shard={ shard } key={ key }></Shard>);
-  },
-  render: function () {
+    return (<Shard shard={shard} key={key} />);
+  };
+
+  render() {
     const shards = _.sortBy(this.props.shards, 'shard').map(this.createShard);
     return (
-      <td className="unassigned">
-        <div className="children">{ shards }</div>
+      <td className="unassigned" data-test-subj="clusterView-Unassigned">
+        <div className="children">{shards}</div>
       </td>
     );
   }
-});
+}

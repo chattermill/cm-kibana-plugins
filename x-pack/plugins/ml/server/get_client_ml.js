@@ -14,14 +14,21 @@
  */
 
 import { once } from 'lodash';
-import esMl from './elasticsearch-ml';
+import { elasticsearchJsPlugin } from './elasticsearch-ml';
 
-export const getClient = once((server) => {
+const callWithRequest = once((server) => {
   const config = {
-    plugins: [esMl],
+    plugins: [ elasticsearchJsPlugin ],
     ...server.config().get('elasticsearch')
   };
   const cluster = server.plugins.elasticsearch.createCluster('ml', config);
 
-  return cluster;
+  return cluster.callWithRequest;
 });
+
+export const callWithRequestFactory = (server, request) => {
+  return (...args) => {
+    return callWithRequest(server)(request, ...args);
+  };
+};
+

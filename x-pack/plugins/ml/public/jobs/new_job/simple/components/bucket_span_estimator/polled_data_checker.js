@@ -38,25 +38,25 @@ export function PolledDataCheckerProvider($injector) {
 
     run() {
       return new Promise((resolve, reject) => {
-        const interval = { name:'1m',  ms: 60000 };
+        const interval = { name: '1m',  ms: 60000 };
         this.performSearch(interval.ms)
-        .then((resp) => {
-          const fullBuckets = _.get(resp, 'aggregations.non_empty_buckets.buckets', []);
-          const result = this.isPolledData(fullBuckets, interval);
-          if (result.pass) {
+          .then((resp) => {
+            const fullBuckets = _.get(resp, 'aggregations.non_empty_buckets.buckets', []);
+            const result = this.isPolledData(fullBuckets, interval);
+            if (result.pass) {
             // data is polled, return a flag and the minimumBucketSpan which should be
             // used as a minimum bucket span for all subsequent tests.
-            this.isPolled = true;
-            this.minimumBucketSpan = result.meanTimeDiff;
-          }
-          resolve({
-            isPolled: this.isPolled,
-            minimumBucketSpan: this.minimumBucketSpan
+              this.isPolled = true;
+              this.minimumBucketSpan = result.meanTimeDiff;
+            }
+            resolve({
+              isPolled: this.isPolled,
+              minimumBucketSpan: this.minimumBucketSpan
+            });
+          })
+          .catch((resp) => {
+            reject(resp);
           });
-        })
-        .catch((resp) => {
-          reject(resp);
-        });
 
       });
     }
@@ -64,12 +64,12 @@ export function PolledDataCheckerProvider($injector) {
     createSearch(intervalMs) {
       const search = {
         query: this.query,
-        aggs : {
-          non_empty_buckets : {
-            date_histogram : {
+        aggs: {
+          non_empty_buckets: {
+            date_histogram: {
               min_doc_count: 1,
-              field : this.timeField,
-              interval : `${intervalMs}ms`
+              field: this.timeField,
+              interval: `${intervalMs}ms`
             }
           }
         }

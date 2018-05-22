@@ -3,7 +3,7 @@ import { ajaxErrorHandlersProvider } from 'plugins/monitoring/lib/ajax_error_han
 
 const uiModule = uiModules.get('monitoring/clusters');
 uiModule.service('monitoringClusters', ($injector) => {
-  return (clusterUuid) => {
+  return (clusterUuid, ccs) => {
     const timefilter = $injector.get('timefilter');
     const { min, max } = timefilter.getBounds();
 
@@ -15,22 +15,23 @@ uiModule.service('monitoringClusters', ($injector) => {
 
     const $http = $injector.get('$http');
     return $http.post(url, {
+      ccs,
       timeRange: {
         min: min.toISOString(),
         max: max.toISOString()
       }
     })
-    .then(response => response.data)
-    .then(data => {
-      if (clusterUuid) {
-        return data[0]; // return single cluster
-      }
-      return data; // return set of clusters
-    })
-    .catch(err => {
-      const Private = $injector.get('Private');
-      const ajaxErrorHandlers = Private(ajaxErrorHandlersProvider);
-      return ajaxErrorHandlers(err);
-    });
+      .then(response => response.data)
+      .then(data => {
+        if (clusterUuid) {
+          return data[0]; // return single cluster
+        }
+        return data; // return set of clusters
+      })
+      .catch(err => {
+        const Private = $injector.get('Private');
+        const ajaxErrorHandlers = Private(ajaxErrorHandlersProvider);
+        return ajaxErrorHandlers(err);
+      });
   };
 });

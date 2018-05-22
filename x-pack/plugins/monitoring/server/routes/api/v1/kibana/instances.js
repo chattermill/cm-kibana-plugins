@@ -1,15 +1,15 @@
 import Joi from 'joi';
-import Promise from 'bluebird';
 import { get } from 'lodash';
 import { getKibanas } from '../../../../lib/kibana/get_kibanas';
 import { getKibanasForClusters } from '../../../../lib/kibana/get_kibanas_for_clusters';
-import { handleError } from '../../../../lib/handle_error';
+import { handleError } from '../../../../lib/errors';
 import { getMetrics } from '../../../../lib/details/get_metrics';
+import { prefixIndexPattern } from '../../../../lib/ccs_utils';
 
-const getKibanaClusterStatus = function (req, kbnIndexPattern) {
-  const clusters = [{ cluster_uuid: req.params.clusterUuid }];
+const getKibanaClusterStatus = function (req, kbnIndexPattern, { clusterUuid }) {
+  const clusters = [{ cluster_uuid: clusterUuid }];
   return getKibanasForClusters(req, kbnIndexPattern, clusters)
-  .then(kibanas => get(kibanas, '[0].stats'));
+    .then(kibanas => get(kibanas, '[0].stats'));
 };
 
 /*
@@ -17,7 +17,7 @@ const getKibanaClusterStatus = function (req, kbnIndexPattern) {
  */
 export function kibanaInstancesRoutes(server) {
   /**
-   * Kibana overview and listing
+   * Kibana overview (metrics) and listing (instances)
    */
   server.route({
     method: 'POST',
@@ -28,6 +28,7 @@ export function kibanaInstancesRoutes(server) {
           clusterUuid: Joi.string().required()
         }),
         payload: Joi.object({
+          ccs: Joi.string().optional(),
           timeRange: Joi.object({
             min: Joi.date().required(),
             max: Joi.date().required()
@@ -37,17 +38,38 @@ export function kibanaInstancesRoutes(server) {
         })
       }
     },
-    handler: (req, reply) => {
+    async handler(req, reply) {
       const config = server.config();
-      const kbnIndexPattern = config.get('xpack.monitoring.kibana.index_pattern');
+      const ccs = req.payload.ccs;
+      const clusterUuid = req.params.clusterUuid;
+      const kbnIndexPattern = prefixIndexPattern(config, 'xpack.monitoring.kibana.index_pattern', ccs);
 
-      return Promise.props({
-        metrics: req.payload.metrics ? getMetrics(req, kbnIndexPattern) : {},
-        kibanas: req.payload.instances ? getKibanas(req, kbnIndexPattern) : [],
-        clusterStatus: getKibanaClusterStatus(req, kbnIndexPattern)
-      })
-      .then (reply)
-      .catch(err => reply(handleError(err, req)));
+      try {
+        const clusterStatusPromise = getKibanaClusterStatus(req, kbnIndexPattern, { clusterUuid });
+        let metricsPromise;
+        let instancesPromise;
+
+        if (req.payload.metrics) {
+          metricsPromise = getMetrics(req, kbnIndexPattern);
+        } else if (req.payload.instances) {
+          metricsPromise = {};
+          instancesPromise = getKibanas(req, kbnIndexPattern, { clusterUuid });
+        }
+
+        const [ clusterStatus, metrics, kibanas ] = await Promise.all([
+          clusterStatusPromise,
+          metricsPromise,
+          instancesPromise,
+        ]);
+
+        reply({
+          clusterStatus,
+          metrics,
+          kibanas,
+        });
+      } catch(err) {
+        reply(handleError(err, req));
+      }
     }
   });
-};
+}

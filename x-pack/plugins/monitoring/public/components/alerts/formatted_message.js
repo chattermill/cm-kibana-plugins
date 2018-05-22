@@ -2,27 +2,31 @@ import moment from 'moment-timezone';
 import 'moment-duration-format';
 import React from 'react';
 import { KuiKeyboardAccessible } from 'ui_framework/components';
-import { formatTimestampToDuration } from '../../lib/format_number';
+import { formatTimestampToDuration } from 'monitoring-common';
 import { CALCULATE_DURATION_UNTIL } from 'monitoring-constants';
 
-export function FormattedMessage({ prefix, suffix, message, metadata, angularChangeUrl }) {
+export function FormattedMessage({ prefix, suffix, message, metadata, changeUrl }) {
   const formattedMessage = (() => {
     if (metadata && metadata.link) {
       if (metadata.link.startsWith('https')) {
         return (
-          <KuiKeyboardAccessible>
-            <a className="kuiLink" href={ metadata.link } target="_blank" data-test-subj="alertAction">
-              { message }
-            </a>
-          </KuiKeyboardAccessible>
+          <a
+            className="kuiLink"
+            href={metadata.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-test-subj="alertAction"
+          >
+            { message }
+          </a>
         );
       }
 
-      const goToLink = () => angularChangeUrl(`/${metadata.link}`);
+      const goToLink = () => changeUrl(`/${metadata.link}`);
 
       return (
         <KuiKeyboardAccessible>
-          <a className="kuiLink" onClick={ goToLink } data-test-subj="alertAction">
+          <a className="kuiLink" onClick={goToLink} data-test-subj="alertAction">
             { message }
           </a>
         </KuiKeyboardAccessible>
@@ -47,7 +51,7 @@ export function FormattedMessage({ prefix, suffix, message, metadata, angularCha
   const formattedPrefix = prefix ? `${prefix} ` : null;
   const formattedSuffix = suffix ? ` ${suffix}` : null;
   return (
-    <span>
+    <span data-test-subj="alertText">
       { formattedPrefix }
       { formattedMessage }
       { formattedSuffix }

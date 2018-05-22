@@ -16,7 +16,7 @@ export function Range(startRow, startColumn, endRow, endColumn) {
     row: endRow,
     column: endColumn
   };
-};
+}
 
 (function () {
   this.isEqual = function (range) {
@@ -132,7 +132,7 @@ export function Range(startRow, startColumn, endRow, endColumn) {
           return -1;
         }
         return column > this.end.column ? 1 : 0;
-      };
+      }
     }
 
     if (row < this.start.row) {
@@ -229,9 +229,9 @@ export function Range(startRow, startColumn, endRow, endColumn) {
     const screenPosEnd = session.documentToScreenPosition(this.end);
 
     return new Range(
-            screenPosStart.row, screenPosStart.column,
-            screenPosEnd.row, screenPosEnd.column
-        );
+      screenPosStart.row, screenPosStart.column,
+      screenPosEnd.row, screenPosEnd.column
+    );
   };
   this.moveBy = function (row, column) {
     this.start.row += row;

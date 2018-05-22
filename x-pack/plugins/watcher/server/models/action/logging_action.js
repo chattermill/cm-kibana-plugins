@@ -1,3 +1,4 @@
+import { badRequest } from 'boom';
 import { BaseAction } from './base_action';
 import { ACTION_TYPES } from '../../../common/constants';
 
@@ -10,8 +11,8 @@ export class LoggingAction extends BaseAction {
   }
 
   // To Kibana
-  get downstreamJSON() {
-    const result = super.downstreamJSON;
+  get downstreamJson() {
+    const result = super.downstreamJson;
     Object.assign(result, {
       text: this.text
     });
@@ -20,8 +21,8 @@ export class LoggingAction extends BaseAction {
   }
 
   // From Kibana
-  static fromDownstreamJSON(json) {
-    const props = super.getPropsFromDownstreamJSON(json);
+  static fromDownstreamJson(json) {
+    const props = super.getPropsFromDownstreamJson(json);
 
     Object.assign(props, {
       text: json.text
@@ -31,8 +32,8 @@ export class LoggingAction extends BaseAction {
   }
 
   // To Elasticsearch
-  get upstreamJSON() {
-    const result = super.upstreamJSON;
+  get upstreamJson() {
+    const result = super.upstreamJson;
 
     result[this.id] = {
       logging: {
@@ -44,14 +45,14 @@ export class LoggingAction extends BaseAction {
   }
 
   // From Elasticsearch
-  static fromUpstreamJSON(json) {
-    const props = super.getPropsFromUpstreamJSON(json);
+  static fromUpstreamJson(json) {
+    const props = super.getPropsFromUpstreamJson(json);
 
     if (!json.actionJson.logging) {
-      throw new Error('json argument must contain an actionJson.logging property');
+      throw badRequest('json argument must contain an actionJson.logging property');
     }
     if (!json.actionJson.logging.text) {
-      throw new Error('json argument must contain an actionJson.logging.text property');
+      throw badRequest('json argument must contain an actionJson.logging.text property');
     }
 
     Object.assign(props, {
@@ -71,4 +72,4 @@ export class LoggingAction extends BaseAction {
     }
   }
   */
-};
+}

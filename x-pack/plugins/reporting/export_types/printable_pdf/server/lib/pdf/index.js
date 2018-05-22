@@ -6,6 +6,7 @@ import xRegExp from 'xregexp';
 
 const assetPath = path.resolve(__dirname, 'assets');
 
+const tableBorderWidth = 1;
 
 function getFont(text) {
   // Once unicode regex scripts are fully supported we should be able to get rid of the dependency
@@ -22,7 +23,7 @@ function getFont(text) {
 }
 
 class PdfMaker {
-  constructor() {
+  constructor(layout, logo) {
     const fontPath = (filename) => path.resolve(assetPath, 'fonts', filename);
     const fonts = {
       Roboto: {
@@ -39,6 +40,8 @@ class PdfMaker {
       }
     };
 
+    this._layout = layout;
+    this._logo = logo;
     this._title = '';
     this._content = [];
     this._printer = new Printer(fonts);
@@ -54,34 +57,38 @@ class PdfMaker {
         pageBreak: 'after',
       }].concat(contents);
     }
-
     this._content.push(contents);
   }
 
-  addImage(filePath, opts = {}) {
+  addImage(base64EncodedData, { title = '', description = '' }) {
     const contents = [];
 
-    if (opts.title && opts.title.length > 0) {
+    if (title && title.length > 0) {
       contents.push({
-        text: opts.title,
+        text: title,
         style: 'heading',
-        font: getFont(opts.title)
+        font: getFont(title),
+        noWrap: true,
       });
     }
 
-    if (opts.description && opts.description.length > 0) {
+    if (description && description.length > 0) {
       contents.push({
-        text: opts.description,
+        text: description,
         style: 'subheading',
-        font: getFont(opts.description)
+        font: getFont(description),
+        noWrap: true,
       });
     }
 
     const img = {
-      image: filePath,
-      width: 500,
+      image: `data:image/png;base64,${base64EncodedData}`,
       alignment: 'center',
     };
+
+    const size = this._layout.getPdfImageSize();
+    img.height = size.height;
+    img.width = size.width;
 
     const wrappedImg = {
       table: {
@@ -92,7 +99,7 @@ class PdfMaker {
       layout: 'simpleBorder'
     };
 
-    contents.push(_.assign(wrappedImg, _.omit(opts, ['title', 'description'])));
+    contents.push(wrappedImg);
 
     this._addContents(contents);
   }
@@ -112,7 +119,7 @@ class PdfMaker {
   }
 
   generate() {
-    const docTemplate = _.assign(getTemplate(this._title), { content: this._content });
+    const docTemplate = _.assign(getTemplate(this._layout, this._logo, this._title), { content: this._content });
     this._pdfDoc = this._printer.createPdfKitDocument(docTemplate, getDocOptions());
     return this;
   }
@@ -135,17 +142,33 @@ class PdfMaker {
     this._pdfDoc.end();
     return this._pdfDoc;
   }
-};
+}
 
-function getTemplate(title) {
+function getTemplate(layout, logo, title) {
   const pageMarginTop = 40;
   const pageMarginBottom = 80;
   const pageMarginWidth = 40;
+  const headingFontSize = 14;
+  const headingMarginTop = 10;
+  const headingMarginBottom = 5;
+  const headingHeight = (headingFontSize * 1.5) + headingMarginTop + headingMarginBottom;
+  const subheadingFontSize = 12;
+  const subheadingMarginTop = 0;
+  const subheadingMarginBottom = 5;
+  const subheadingHeight = (subheadingFontSize * 1.5) + subheadingMarginTop + subheadingMarginBottom;
+
 
   return {
     // define page size
-    pageOrientation: 'portrait',
-    pageSize: 'A4',
+    pageOrientation: layout.getPdfPageOrientation(),
+    pageSize: layout.getPdfPageSize({
+      pageMarginTop,
+      pageMarginBottom,
+      pageMarginWidth,
+      tableBorderWidth,
+      headingHeight,
+      subheadingHeight,
+    }),
     pageMargins: [ pageMarginWidth, pageMarginTop, pageMarginWidth, pageMarginBottom ],
 
     header: function () {
@@ -165,35 +188,51 @@ function getTemplate(title) {
       const logoPath = path.resolve(assetPath, 'img', 'logo-grey.png');
       return {
         margin: [ pageMarginWidth, pageMarginBottom / 4, pageMarginWidth, 0 ],
-        alignment: 'justify',
-        columns: [
-          {
-            width: 100,
-            image: logoPath,
-          }, {
-            margin: [ 120, 10, 0, 0 ],
-            text: 'Page ' + currentPage.toString() + ' of ' + pageCount,
-            style: {
-              color: '#aaa'
-            },
-          },
-        ]
+        layout: 'noBorder',
+        table: {
+          widths: [ 100, '*', 100],
+          body: [
+            [{
+              fit: [100, 35],
+              image: logo || logoPath,
+            }, {
+              alignment: 'center',
+              text: 'Page ' + currentPage.toString() + ' of ' + pageCount,
+              style: {
+                color: '#aaa'
+              },
+            }, ''],
+            [
+              logo ? {
+                text: 'Powered by Elastic',
+                fontSize: 10,
+                style: {
+                  color: "#aaa"
+                },
+                margin: [0, 2, 0, 0]
+              } : '',
+              '',
+              ''
+            ]
+          ]
+        }
       };
     },
 
     styles: {
       heading: {
         alignment: 'left',
-        fontSize: 14,
+        fontSize: headingFontSize,
         bold: true,
-        marginTop: 10,
-        marginBottom: 5,
+        marginTop: headingMarginTop,
+        marginBottom: headingMarginBottom,
       },
       subheading: {
         alignment: 'left',
+        fontSize: subheadingFontSize,
         italics: true,
         marginLeft: 20,
-        marginBottom: 5,
+        marginBottom: subheadingMarginBottom,
       },
       warning: {
         color: '#f39c12' // same as @brand-warning in Kibana colors.less
@@ -210,10 +249,19 @@ function getTemplate(title) {
 function getDocOptions() {
   return {
     tableLayouts: {
+      noBorder: {
+        // format is function (i, node) { ... };
+        hLineWidth: () => 0,
+        vLineWidth: () => 0,
+        paddingLeft: () => 0,
+        paddingRight: () => 0,
+        paddingTop: () => 0,
+        paddingBottom: () => 0,
+      },
       simpleBorder: {
         // format is function (i, node) { ... };
-        hLineWidth: () => 1,
-        vLineWidth: () => 1,
+        hLineWidth: () => tableBorderWidth,
+        vLineWidth: () => tableBorderWidth,
         hLineColor: () => 'silver',
         vLineColor: () => 'silver',
         paddingLeft: () => 0,
@@ -226,5 +274,5 @@ function getDocOptions() {
 }
 
 export const pdf = {
-  create: () => new PdfMaker()
+  create: (layout, logo) => new PdfMaker(layout, logo)
 };

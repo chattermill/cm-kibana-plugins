@@ -1,11 +1,5 @@
-import hapiAuthBasic from 'hapi-auth-basic';
-import hapiAuthCookie from 'hapi-auth-cookie';
 import { resolve } from 'path';
-import Promise from 'bluebird';
-import { getBasicValidate } from './server/lib/get_basic_validate';
-import { getCookieValidate } from './server/lib/get_cookie_validate';
 import { getUserProvider } from './server/lib/get_user';
-import { isAuthenticatedProvider } from './server/lib/is_authenticated';
 import { initAuthenticateApi } from './server/routes/api/v1/authenticate';
 import { initUsersApi } from './server/routes/api/v1/users';
 import { initRolesApi } from './server/routes/api/v1/roles';
@@ -13,11 +7,10 @@ import { initIndicesApi } from './server/routes/api/v1/indices';
 import { initLoginView } from './server/routes/views/login';
 import { initLogoutView } from './server/routes/views/logout';
 import { validateConfig } from './server/lib/validate_config';
-import { createScheme } from './server/lib/login_scheme';
+import { authenticateFactory } from './server/lib/auth_redirect';
 import { checkLicense } from './server/lib/check_license';
+import { initAuthenticator } from './server/lib/authentication/authenticator';
 import { mirrorPluginStatus } from '../../server/lib/mirror_plugin_status';
-import { LOGIN_DISABLED_MESSAGE } from './server/lib/login_disabled_message';
-import { AuthScopeService } from './server/lib/auth_scope_service';
 
 export const security = (kibana) => new kibana.Plugin({
   id: 'security',
@@ -27,11 +20,17 @@ export const security = (kibana) => new kibana.Plugin({
 
   config(Joi) {
     return Joi.object({
+      authProviders: Joi.array().items(Joi.string()).default(['basic']),
       enabled: Joi.boolean().default(true),
       cookieName: Joi.string().default('sid'),
       encryptionKey: Joi.string(),
       sessionTimeout: Joi.number().allow(null).default(null),
-      secureCookies: Joi.boolean().default(false)
+      secureCookies: Joi.boolean().default(false),
+      public: Joi.object({
+        protocol: Joi.string().valid(['http', 'https']),
+        hostname: Joi.string().hostname(),
+        port: Joi.number().integer().min(0).max(65535)
+      }).default(),
     }).default();
   },
 
@@ -46,19 +45,6 @@ export const security = (kibana) => new kibana.Plugin({
       injectVars(server) {
         const pluginId = 'security';
         const xpackInfo = server.plugins.xpack_main.info;
-
-        if (!xpackInfo) {
-          const loginMessage = LOGIN_DISABLED_MESSAGE;
-
-          return {
-            loginState: {
-              showLogin: true,
-              allowLogin: false,
-              loginMessage,
-            }
-          };
-        }
-
         const { showLogin, loginMessage, allowLogin } = xpackInfo.feature(pluginId).getLicenseCheckResults() || {};
 
         return {
@@ -79,6 +65,7 @@ export const security = (kibana) => new kibana.Plugin({
       'plugins/security/hacks/on_session_timeout',
       'plugins/security/hacks/on_unauthorized_response'
     ],
+    home: ['plugins/security/register_feature'],
     injectDefaultVars: function (server) {
       const config = server.config();
 
@@ -89,67 +76,34 @@ export const security = (kibana) => new kibana.Plugin({
     }
   },
 
-  init(server) {
+  async init(server) {
     const thisPlugin = this;
     const xpackMainPlugin = server.plugins.xpack_main;
     mirrorPluginStatus(xpackMainPlugin, thisPlugin);
-    xpackMainPlugin.status.once('green', () => {
-      // Register a function that is called whenever the xpack info changes,
-      // to re-compute the license check results for this plugin
-      xpackMainPlugin.info.feature(thisPlugin.id).registerLicenseCheckResultsGenerator(checkLicense);
-    });
+
+    // Register a function that is called whenever the xpack info changes,
+    // to re-compute the license check results for this plugin
+    xpackMainPlugin.info.feature(thisPlugin.id).registerLicenseCheckResultsGenerator(checkLicense);
 
     const config = server.config();
     validateConfig(config, message => server.log(['security', 'warning'], message));
 
-    const cookieName = config.get('xpack.security.cookieName');
-    const authScope = new AuthScopeService();
-    server.expose('registerAuthScopeGetter', (scopeExtender) => {
-      authScope.registerGetter(scopeExtender);
-    });
+    // Create a Hapi auth scheme that should be applied to each request.
+    server.auth.scheme('login', () => ({ authenticate: authenticateFactory(server) }));
 
-    const register = Promise.promisify(server.register, { context: server });
-    Promise.all([
-      register(hapiAuthBasic),
-      register(hapiAuthCookie)
-    ])
-    .then(() => {
-      server.auth.scheme('login', createScheme({
-        redirectUrl: (path) => loginUrl(config.get('server.basePath'), path),
-        strategies: ['security-cookie', 'security-basic'],
-      }));
-
-      server.auth.strategy('session', 'login', 'required');
-
-      server.auth.strategy('security-basic', 'basic', false, {
-        validateFunc: getBasicValidate(server, authScope)
-      });
-
-      server.auth.strategy('security-cookie', 'cookie', false, {
-        cookie: cookieName,
-        password: config.get('xpack.security.encryptionKey'),
-        clearInvalid: true,
-        validateFunc: getCookieValidate(server, authScope),
-        isSecure: config.get('xpack.security.secureCookies'),
-        path: config.get('server.basePath') + '/'
-      });
-    });
+    // The `required` means that the `session` strategy that is based on `login` schema defined above will be
+    // automatically assigned to all routes that don't contain an auth config.
+    server.auth.strategy('session', 'login', 'required');
 
     getUserProvider(server);
-    isAuthenticatedProvider(server);
 
+    await initAuthenticator(server);
     initAuthenticateApi(server);
     initUsersApi(server);
     initRolesApi(server);
     initIndicesApi(server);
-    initLoginView(server, thisPlugin, xpackMainPlugin);
-    initLogoutView(server, thisPlugin);
+    initLoginView(server, xpackMainPlugin);
+    initLogoutView(server);
 
   }
 });
-
-function loginUrl(basePath, requestedPath) {
-  // next must include basePath otherwise it'll be ignored
-  const next = encodeURIComponent(`${basePath}${requestedPath}`);
-  return `${basePath}/login?next=${next}`;
-}

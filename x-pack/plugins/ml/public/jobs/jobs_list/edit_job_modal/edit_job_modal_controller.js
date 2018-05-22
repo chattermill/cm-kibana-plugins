@@ -17,7 +17,7 @@ import _ from 'lodash';
 import 'plugins/ml/jobs/new_job/advanced/detectors_list_directive';
 import './styles/main.less';
 import angular from 'angular';
-import { calculateDatafeedFrequencyDefaultSeconds } from 'plugins/ml/util/job_utils';
+import { calculateDatafeedFrequencyDefaultSeconds } from 'plugins/ml/../common/util/job_utils';
 import { parseInterval } from 'ui/utils/parse_interval';
 
 import { uiModules } from 'ui/modules';
@@ -40,6 +40,7 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
       { index: 0, title: 'Job Details', hidden: false },
       { index: 1, title: 'Detectors', hidden: false },
       { index: 2, title: 'Datafeed', hidden: true },
+      { index: 3, title: 'Custom URLs', hidden: false }
     ],
     changeTab: function (tab) {
       $scope.ui.currentTab = tab.index;
@@ -53,10 +54,11 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
     },
     stoppingDatafeed: false,
     validation: {
-      tabs:[
+      tabs: [
         { index: 0, valid: true, checks: { categorizationFilters: { valid: true } } }
       ]
-    }
+    },
+    editingNewCustomUrl: false
   };
 
   // extract datafeed settings
@@ -72,7 +74,11 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
     $scope.ui.datafeed.scrollSizeText = datafeedConfig.scroll_size;
   }
 
-  $scope.addCustomUrl = function () {
+  $scope.editNewCustomUrl = function () {
+    $scope.ui.editingNewCustomUrl = true;
+  };
+
+  $scope.addCustomUrl = function (customUrl) {
     if (!$scope.job.custom_settings) {
       $scope.job.custom_settings = {};
     }
@@ -80,7 +86,9 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
       $scope.job.custom_settings.custom_urls = [];
     }
 
-    $scope.job.custom_settings.custom_urls.push({ url_name: '', url_value: '' });
+    $scope.job.custom_settings.custom_urls.push(customUrl);
+
+    $scope.ui.editingNewCustomUrl = false;
   };
 
   $scope.removeCustomUrl = function (index) {
@@ -164,6 +172,11 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
     // if the job description has changed, add it to the jobData json
     if ($scope.job.description !== params.job.description) {
       jobData.description = $scope.job.description;
+    }
+
+    // if groups exist, add it to the jobData json
+    if (Array.isArray($scope.job.groups)) {
+      jobData.groups = $scope.job.groups;
     }
 
     // check each detector. if the description or filters have changed, add it to the jobData json
@@ -289,13 +302,13 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
     // if anything has changed, post the changes
     if (Object.keys(jobData).length) {
       mlJobService.updateJob(jobId, jobData)
-      .then((resp) => {
-        if (resp.success) {
-          saveDatafeed();
-        } else {
-          saveFail(resp);
-        }
-      });
+        .then((resp) => {
+          if (resp.success) {
+            saveDatafeed();
+          } else {
+            saveFail(resp);
+          }
+        });
     } else {
       saveDatafeed();
     }
@@ -304,13 +317,13 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
       if (Object.keys(datafeedData).length) {
         const datafeedId = $scope.job.datafeed_config.datafeed_id;
         mlJobService.updateDatafeed(datafeedId, datafeedData)
-        .then((resp) => {
-          if (resp.success) {
-            saveComplete();
-          } else {
-            saveFail(resp);
-          }
-        });
+          .then((resp) => {
+            if (resp.success) {
+              saveComplete();
+            } else {
+              saveFail(resp);
+            }
+          });
       } else {
         saveComplete();
       }
@@ -333,6 +346,6 @@ module.controller('MlEditJobModal', function ($scope, $modalInstance, $modal, pa
 
   $scope.cancel = function () {
     msgs.clear();
-    $modalInstance.dismiss('cancel');
+    $modalInstance.close();
   };
 });

@@ -1,121 +1,176 @@
 import React from 'react';
-import { get, capitalize } from 'lodash';
+import { get } from 'lodash';
 import { formatNumber } from 'plugins/monitoring/lib/format_number';
-import { KuiKeyboardAccessible } from 'ui_framework/components';
-import { ElasticsearchStatusIcon } from 'plugins/monitoring/components/elasticsearch/status_icon';
 import { ClusterItemContainer, HealthStatusIndicator, BytesUsage, BytesPercentageUsage } from './helpers';
 
-export class ElasticsearchPanel extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      primaries: 'N/A',
-      replicas: 'N/A'
-    };
+import {
+  EuiFlexGrid,
+  EuiFlexItem,
+  EuiLink,
+  EuiTitle,
+  EuiPanel,
+  EuiDescriptionList,
+  EuiDescriptionListTitle,
+  EuiDescriptionListDescription,
+  EuiHorizontalRule,
+} from '@elastic/eui';
+
+const calculateShards = shards => {
+  const total = get(shards, 'total', 0);
+  let primaries = get(shards, 'primaries', 'N/A');
+  let replicas = 'N/A';
+
+  // we subtract primaries from total to get replica count, so if we don't know primaries, then
+  //  we cannot know replicas (because we'd be showing the wrong number!)
+  if (primaries !== 'N/A') {
+    replicas = formatNumber(total - primaries, 'int_commas');
+    primaries = formatNumber(primaries, 'int_commas');
   }
 
-  componentWillReceiveProps(nextProps) {
-    const shards = get(nextProps, 'cluster_stats.indices.shards', {});
-    const total = get(shards, 'total', 0);
-    let primaries = get(shards, 'primaries', 'N/A');
-    let replicas = 'N/A';
+  return {
+    primaries,
+    replicas
+  };
+};
 
-    // we subtract primaries from total to get replica count, so if we don't know primaries, then
-    //  we cannot know replicas (because we'd be showing the wrong number!)
-    if (primaries !== 'N/A') {
-      replicas = formatNumber(total - primaries, 'int_commas');
-      primaries = formatNumber(primaries, 'int_commas');
-    }
+export function ElasticsearchPanel(props) {
 
-    this.setState({
-      primaries,
-      replicas
-    });
-  }
+  const clusterStats = props.cluster_stats || {};
+  const nodes = clusterStats.nodes;
+  const indices = clusterStats.indices;
 
-  showMlJobs() {
+  const goToElasticsearch = () => props.changeUrl('elasticsearch');
+  const goToNodes = () => props.changeUrl('elasticsearch/nodes');
+  const goToIndices = () => props.changeUrl('elasticsearch/indices');
+
+  const { primaries, replicas } = calculateShards(get(props, 'cluster_stats.indices.shards', {}));
+
+  const statusIndicator = (
+    <HealthStatusIndicator status={clusterStats.status} />
+  );
+
+  const showMlJobs = () => {
     // if license doesn't support ML, then `ml === null`
-    if (this.props.ml) {
-      return <dd>Jobs: { this.props.ml.jobs }</dd>;
+    if (props.ml) {
+      return [
+        <EuiDescriptionListTitle key="mlJobsListTitle">Jobs</EuiDescriptionListTitle>,
+        <EuiDescriptionListDescription key="mlJobsCount" data-test-subj="esMlJobs">{ props.ml.jobs }</EuiDescriptionListDescription>
+      ];
     }
     return null;
-  }
+  };
 
-  render() {
-    const clusterStats = this.props.cluster_stats || {};
-    const nodes = clusterStats.nodes;
-    const indices = clusterStats.indices;
+  return (
+    <ClusterItemContainer {...props} statusIndicator={statusIndicator} url="elasticsearch" title="Elasticsearch">
+      <EuiFlexGrid columns={3}>
 
-    const statusIndicator = (
-      <HealthStatusIndicator>
-        <ElasticsearchStatusIcon status={ clusterStats.status } />&nbsp;
-        { capitalize(clusterStats.status) }
-      </HealthStatusIndicator>
-    );
+        <EuiFlexItem>
+          <EuiPanel paddingSize="m">
+            <EuiTitle size="s">
+              <h3>
+                <EuiLink
+                  onClick={goToElasticsearch}
+                  aria-label="Elasticsearch Overview"
+                  data-test-subj="esOverview"
+                >
+                  Overview
+                </EuiLink>
+              </h3>
+            </EuiTitle>
+            <EuiHorizontalRule margin="m" />
+            <EuiDescriptionList type="column">
+              <EuiDescriptionListTitle>Version</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esVersion">
+                { get(nodes, 'versions[0]') || 'N/A' }
+              </EuiDescriptionListDescription>
+              <EuiDescriptionListTitle>Uptime</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esUptime">
+                { formatNumber(get(nodes, 'jvm.max_uptime_in_millis'), 'time_since') }
+              </EuiDescriptionListDescription>
+              {showMlJobs()}
+            </EuiDescriptionList>
+          </EuiPanel>
+        </EuiFlexItem>
 
-    const goToElasticsearch = () => this.props.angularChangeUrl('elasticsearch');
-    const goToNodes = () => this.props.angularChangeUrl('elasticsearch/nodes');
-    const goToIndices = () => this.props.angularChangeUrl('elasticsearch/indices');
-
-    return (
-      <ClusterItemContainer { ...this.props } statusIndicator={ statusIndicator } url='elasticsearch' title='Elasticsearch'>
-        <div className='row'>
-          <div className='col-md-4'>
-            <dl data-test-subj='elasticsearch_overview' data-overview-status={ this.props.status }>
-              <dt className='cluster-panel__inner-title'>
-                <KuiKeyboardAccessible>
-                  <a className='kuiLink' onClick={ goToElasticsearch } >
-                    Overview
-                  </a>
-                </KuiKeyboardAccessible>
-              </dt>
-              <dd>Version: { get(nodes, 'versions[0]') || 'N/A' }</dd>
-              <dd>Uptime: { formatNumber(get(nodes, 'jvm.max_uptime_in_millis'), 'time_since') }</dd>
-              { this.showMlJobs() }
-            </dl>
-          </div>
-          <div className='col-md-4'>
-            <dl>
-              <dt className='cluster-panel__inner-title'>
-                <KuiKeyboardAccessible>
-                  <a className='kuiLink' onClick={ goToNodes } >
-                    Nodes: <span data-test-subj='number_of_elasticsearch_nodes'>
-                      { formatNumber(get(nodes, 'count.total'), 'int_commas') }
-                    </span>
-                  </a>
-                </KuiKeyboardAccessible>
-              </dt>
-              <dd>
-                Disk Available: <BytesUsage
-                  usedBytes={ get(nodes, 'fs.available_in_bytes') }
-                  maxBytes={ get(nodes, 'fs.total_in_bytes') }
+        <EuiFlexItem>
+          <EuiPanel paddingSize="m">
+            <EuiTitle size="s">
+              <h3>
+                <EuiLink
+                  data-test-subj="esNumberOfNodes"
+                  onClick={goToNodes}
+                >
+                  Nodes: { formatNumber(get(nodes, 'count.total'), 'int_commas') }
+                </EuiLink>
+              </h3>
+            </EuiTitle>
+            <EuiHorizontalRule margin="m" />
+            <EuiDescriptionList type="column">
+              <EuiDescriptionListTitle>Disk Available</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esDiskAvailable">
+                <BytesUsage
+                  usedBytes={get(nodes, 'fs.available_in_bytes')}
+                  maxBytes={get(nodes, 'fs.total_in_bytes')}
                 />
-              </dd>
-              <dd>
-                JVM Heap: <BytesPercentageUsage
-                  usedBytes={ get(nodes, 'jvm.mem.heap_used_in_bytes') }
-                  maxBytes={ get(nodes, 'jvm.mem.heap_max_in_bytes') }
+              </EuiDescriptionListDescription>
+              <EuiDescriptionListTitle>JVM Heap</EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esJvmHeap">
+                <BytesPercentageUsage
+                  usedBytes={get(nodes, 'jvm.mem.heap_used_in_bytes')}
+                  maxBytes={get(nodes, 'jvm.mem.heap_max_in_bytes')}
                 />
-              </dd>
-            </dl>
-          </div>
-          <div className='col-md-4'>
-            <dl>
-              <dt className='cluster-panel__inner-title'>
-                <KuiKeyboardAccessible>
-                  <a className='kuiLink' onClick={ goToIndices  } >
-                    Indices: { formatNumber(get(indices, 'count'), 'int_commas') }
-                  </a>
-                </KuiKeyboardAccessible>
-              </dt>
-              <dd>Documents: { formatNumber(get(indices, 'docs.count'), 'int_commas') }</dd>
-              <dd>Disk Usage: { formatNumber(get(indices, 'store.size_in_bytes'), 'bytes') }</dd>
-              <dd>Primary Shards: { this.state.primaries }</dd>
-              <dd>Replica Shards: { this.state.replicas }</dd>
-            </dl>
-          </div>
-        </div>
-      </ClusterItemContainer>
-    );
-  }
-};
+              </EuiDescriptionListDescription>
+            </EuiDescriptionList>
+          </EuiPanel>
+        </EuiFlexItem>
+
+        <EuiFlexItem>
+          <EuiPanel paddingSize="m">
+            <EuiTitle size="s">
+              <h3>
+                <EuiLink
+                  onClick={goToIndices}
+                  data-test-subj="esNumberOfIndices"
+                  aria-label={`Elasticsearch Indices: ${ formatNumber(get(indices, 'count'), 'int_commas') }`}
+                >
+                  Indices: { formatNumber(get(indices, 'count'), 'int_commas') }
+                </EuiLink>
+              </h3>
+            </EuiTitle>
+            <EuiHorizontalRule margin="m" />
+            <EuiDescriptionList type="column">
+              <EuiDescriptionListTitle>
+                Documents
+              </EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esDocumentsCount">
+                { formatNumber(get(indices, 'docs.count'), 'int_commas') }
+              </EuiDescriptionListDescription>
+
+              <EuiDescriptionListTitle>
+                Disk Usage
+              </EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esDiskUsage">
+                { formatNumber(get(indices, 'store.size_in_bytes'), 'bytes') }
+              </EuiDescriptionListDescription>
+
+              <EuiDescriptionListTitle>
+                Primary Shards
+              </EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esPrimaryShards">
+                { primaries }
+              </EuiDescriptionListDescription>
+
+              <EuiDescriptionListTitle>
+                Replica Shards
+              </EuiDescriptionListTitle>
+              <EuiDescriptionListDescription data-test-subj="esReplicaShards">
+                { replicas }
+              </EuiDescriptionListDescription>
+            </EuiDescriptionList>
+          </EuiPanel>
+        </EuiFlexItem>
+
+      </EuiFlexGrid>
+    </ClusterItemContainer>
+  );
+}

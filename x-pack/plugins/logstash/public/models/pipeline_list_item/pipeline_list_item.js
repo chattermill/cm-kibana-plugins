@@ -30,4 +30,4 @@ export class PipelineListItem {
     props.lastModified = pipelineListItem.last_modified;
     return new PipelineListItem(props);
   }
-};
+}

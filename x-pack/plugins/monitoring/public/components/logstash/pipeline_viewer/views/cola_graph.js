@@ -22,7 +22,7 @@ function makeMarker(svgDefs, id, fill) {
     .attr('markerWidth', 3)
     .attr('markerHeight', 3)
     .attr('orient', 'auto')
-  .append('path')
+    .append('path')
     .attr('d', 'M0,-5L10,0L0,5L2,0')
     .attr('stroke-width', '0px')
     .attr('fill', fill);
@@ -31,9 +31,9 @@ function makeMarker(svgDefs, id, fill) {
 function makeBackground(parentEl) {
   return parentEl
     .append('rect')
-      .attr('width', '100%')
-      .attr('height', '100%')
-      .attr('fill', '#efefef');
+    .attr('width', '100%')
+    .attr('height', '100%')
+    .attr('fill', '#efefef');
 }
 
 function makeGroup(parentEl) {
@@ -49,23 +49,24 @@ function makeNodes(nodesLayer, colaVertices) {
   nodes
     .enter()
     .append('g')
-      .attr('id', d => `nodeg-${d.vertex.htmlAttrId}`)
-      .attr('class', d => `lspvVertex ${d.vertex.typeString}`)
-      .attr('width', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.WIDTH_PX)
-      .attr('height', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.HEIGHT_PX);
+    .attr('id', d => `nodeg-${d.vertex.htmlAttrId}`)
+    .attr('class', d => `lspvVertex ${d.vertex.typeString}`)
+    .attr('width', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.WIDTH_PX)
+    .attr('height', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.HEIGHT_PX);
 
   nodes
     .append('rect')
-      .attr('class', 'lspvVertexBounding')
-      .attr('rx', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.BORDER_RADIUS_PX)
-      .attr('ry', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.BORDER_RADIUS_PX);
+    .attr('class', 'lspvVertexBounding')
+    .attr('rx', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.BORDER_RADIUS_PX)
+    .attr('ry', LOGSTASH.PIPELINE_VIEWER.GRAPH.VERTICES.BORDER_RADIUS_PX);
 
   return nodes;
 }
 
-function addNodesMouseBehaviors(nodes, onMouseover, onMouseout) {
+function addNodesMouseBehaviors(nodes, onMouseover, onMouseout, onMouseclick) {
   nodes.on('mouseover', onMouseover);
   nodes.on('mouseout', onMouseout);
+  nodes.on('click', onMouseclick);
 }
 
 function makeInputNodes(nodes) {
@@ -125,7 +126,7 @@ export class ColaGraph extends React.Component {
     makeMarker(svgDefs, 'lspvFalseMarker', '#EE408A');
 
     // Set initial zoom to 100%. You need both the translate and scale options
-    const zoom = d3.behavior.zoom().translate([100,100]).scale(1);
+    const zoom = d3.behavior.zoom().translate([100, 100]).scale(1);
     const vis = outer
       .append('g')
       .attr('transform', 'translate(0,0) scale(1)');
@@ -145,7 +146,7 @@ export class ColaGraph extends React.Component {
     this.ifs = makeIfNodes(this.nodes);
     this.queue = makeQueueNode(this.nodes);
 
-    addNodesMouseBehaviors(this.nodes, this.onMouseover, this.onMouseout);
+    addNodesMouseBehaviors(this.nodes, this.onMouseover, this.onMouseout, this.onMouseclick);
 
     this.linksLayer = makeGroup(vis);
 
@@ -154,13 +155,13 @@ export class ColaGraph extends React.Component {
     });
 
     this.d3cola
-        .nodes(this.graph.colaVertices)
-        .links(this.graph.colaEdges)
-        .groups(ifTriangleColaGroups)
-        .constraints(this._getConstraints())
-        // This number controls the max number of iterations for the layout iteration to
-        // solve the constraints. Higher numbers usually wind up in a better layout
-        .start(10000);
+      .nodes(this.graph.colaVertices)
+      .links(this.graph.colaEdges)
+      .groups(ifTriangleColaGroups)
+      .constraints(this._getConstraints())
+    // This number controls the max number of iterations for the layout iteration to
+    // solve the constraints. Higher numbers usually wind up in a better layout
+      .start(10000);
 
     this.makeLinks();
 
@@ -264,8 +265,8 @@ export class ColaGraph extends React.Component {
 
     const linkGroup = this.links.enter()
       .append('g')
-        .attr('id', (d) => `lspvEdge-${d.edge.htmlAttrId}`)
-        .attr('class', (d) => d.edge.svgClass);
+      .attr('id', (d) => `lspvEdge-${d.edge.htmlAttrId}`)
+      .attr('class', (d) => d.edge.svgClass);
     linkGroup.append('path');
 
     const booleanLinks = linkGroup.filter('.lspvEdgeBoolean');
@@ -275,14 +276,14 @@ export class ColaGraph extends React.Component {
 
     this.booleanLabels
       .append('circle')
-        .attr('r', LOGSTASH.PIPELINE_VIEWER.GRAPH.EDGES.LABEL_RADIUS);
+      .attr('r', LOGSTASH.PIPELINE_VIEWER.GRAPH.EDGES.LABEL_RADIUS);
     this.booleanLabels
       .append('text')
-        .attr('text-anchor', 'middle') // Position the text on its vertical
-        .text(d => d.edge.when ? 'T' : 'F');
+      .attr('text-anchor', 'middle') // Position the text on its vertical
+      .text(d => d.edge.when ? 'T' : 'F');
   }
 
-  updateGraph(nextState = {}) {
+  updateGraph(nextProps = {}, nextState = {}) {
     this.processors.call(updateProcessorVertex);
     this.inputs.call(updateInputVertex);
 
@@ -309,6 +310,14 @@ export class ColaGraph extends React.Component {
       const grayedEdges = this.linksLayer.selectAll('.lspvEdge').filter(d => nonLineageEdges.indexOf(d.edge) >= 0);
       grayedEdges.classed('lspvEdge-grayed', true);
     }
+
+    const detailVertex = nextProps.detailVertex;
+    if (detailVertex) {
+      const selection = this.nodesLayer
+        .selectAll('#nodeg-' + detailVertex.htmlAttrId)
+        .selectAll('rect');
+      selection.classed('lspvVertexBounding-highlighted', true);
+    }
   }
 
   onMouseover = (node) => {
@@ -317,6 +326,10 @@ export class ColaGraph extends React.Component {
 
   onMouseout = () => {
     this.setState({ hoverNode: null });
+  }
+
+  onMouseclick = (e) => {
+    this.props.onShowVertexDetails(e.vertex);
   }
 
   get graph() {
@@ -416,7 +429,7 @@ export class ColaGraph extends React.Component {
           });
         });
       }
-    };
+    }
 
     return constraints;
   }
@@ -426,13 +439,13 @@ export class ColaGraph extends React.Component {
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        ref={ svgEl => this.renderGraph(svgEl) }
+        ref={svgEl => this.renderGraph(svgEl)}
         width="100%"
         height="100%"
         preserveAspectRatio="xMinYMin meet"
-        viewBox={ viewBox }
+        viewBox={viewBox}
         pointerEvents="all"
-      ></svg>
+      />
     );
   }
 
@@ -440,9 +453,9 @@ export class ColaGraph extends React.Component {
     this.updateGraph();
   }
 
-  shouldComponentUpdate(_nextProps, nextState) {
+  shouldComponentUpdate(nextProps, nextState) {
     // Let D3 control updates to this component's DOM.
-    this.updateGraph(nextState);
+    this.updateGraph(nextProps, nextState);
 
     // Since D3 is controlling any updates to this component's DOM,
     // we don't want React to update this component's DOM.

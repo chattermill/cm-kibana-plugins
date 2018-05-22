@@ -19,51 +19,51 @@ import React from 'react';
 import { Unassigned } from './unassigned';
 import { Assigned } from './assigned';
 
-class ShardRow extends React.Component {
-  render() {
-    let unassigned;
-    if (this.props.data.unassigned && this.props.data.unassigned.length) {
-      unassigned = (
-        <Unassigned shards={ this.props.data.unassigned }/>
-      );
-    } else {
-      if (this.props.cols === 3) {
-        unassigned = (<td></td>);
-      }
-    }
-    return (
-      <tr>
-        { unassigned }
-        <Assigned
-          shardStats={ this.props.shardStats }
-          data={ this.props.data.children }
-          changeUrl={ this.props.changeUrl }
-        />
-      </tr>
+const ShardRow = props => {
+  let unassigned;
+  if (props.data.unassigned && props.data.unassigned.length) {
+    unassigned = (
+      <Unassigned shards={props.data.unassigned}/>
     );
+  } else {
+    if (props.cols === 3) {
+      unassigned = (<td />);
+    }
   }
-}
+  return (
+    <tr>
+      { unassigned }
+      <Assigned
+        shardStats={props.shardStats}
+        data={props.data.children}
+        changeUrl={props.changeUrl}
+      />
+    </tr>
+  );
+};
 
-export const TableBody = React.createClass({
-  displayName: 'TableBody',
-  createRow: function (data) {
+export class TableBody extends React.Component {
+  static displayName = 'TableBody';
+
+  createRow = (data, index) => {
     return (
       <ShardRow
-        key={ data.name }
-        data={ data }
-        { ...this.props }
-        changeUrl={ this.props.changeUrl }
+        key={`shardRow-${index}`}
+        data={data}
+        {...this.props}
+        changeUrl={this.props.changeUrl}
       />
     );
-  },
-  render: function () {
+  };
+
+  render() {
     if (this.props.totalCount === 0) {
       return (
         <tbody>
           <tr>
-            <td colSpan={ this.props.cols }>
+            <td colSpan={this.props.cols}>
               <div>
-                <p style={ { margin: '10px 0' } } className='text-center lead'>
+                <p style={{ margin: '10px 0' }} className="text-center lead">
                   There are no shards allocated.
                 </p>
               </div>
@@ -86,10 +86,10 @@ export const TableBody = React.createClass({
     return (
       <tbody>
         <tr>
-          <td colSpan={ this.props.cols }></td>
+          <td colSpan={this.props.cols} />
         </tr>
       </tbody>
     );
 
   }
-});
+}

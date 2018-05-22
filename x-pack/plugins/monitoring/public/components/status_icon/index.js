@@ -10,8 +10,12 @@ export function StatusIcon({ type, label }) {
   const icon = typeToIconMap[type];
 
   return (
-    <span className='kuiStatusText'>
-      <img src={ `../plugins/monitoring/icons/${icon}` } alt={ label } />
+    <span className="kuiStatusText">
+      <img
+        src={`../plugins/monitoring/icons/${icon}`}
+        alt={label}
+        data-test-subj="statusIcon"
+      />
     </span>
   );
 }

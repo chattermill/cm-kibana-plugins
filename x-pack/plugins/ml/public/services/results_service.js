@@ -17,13 +17,14 @@
 // Ml Results dashboards.
 import _ from 'lodash';
 
+import { ML_MEDIAN_PERCENTS } from 'plugins/ml/../common/util/job_utils';
 import { escapeForElasticsearchQuery } from 'plugins/ml/util/string_utils';
 import { ML_RESULTS_INDEX_PATTERN } from 'plugins/ml/constants/index_patterns';
 
 import { uiModules } from 'ui/modules';
 const module = uiModules.get('apps/ml');
 
-module.service('mlResultsService', function ($q, es) {
+module.service('mlResultsService', function ($q, es, ml) {
 
   // Obtains the maximum bucket anomaly scores by job ID and time.
   // Pass an empty array or ['*'] to search over all job IDs.
@@ -66,7 +67,6 @@ module.service('mlResultsService', function ($q, es) {
       });
     }
 
-    // TODO - remove hardcoded aggregation interval.
     es.search({
       index: ML_RESULTS_INDEX_PATTERN,
       size: 0,
@@ -123,29 +123,144 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      const dataByJobId = _.get(resp, ['aggregations', 'jobId', 'buckets'], []);
-      _.each(dataByJobId, (dataForJob) => {
-        const jobId = dataForJob.key;
+      .then((resp) => {
+        const dataByJobId = _.get(resp, ['aggregations', 'jobId', 'buckets'], []);
+        _.each(dataByJobId, (dataForJob) => {
+          const jobId = dataForJob.key;
 
-        const resultsForTime = {};
+          const resultsForTime = {};
 
-        const dataByTime = _.get(dataForJob, ['byTime', 'buckets'], []);
-        _.each(dataByTime, (dataForTime) => {
-          const value = _.get(dataForTime, ['anomalyScore', 'value']);
-          if (value !== undefined) {
-            const time = dataForTime.key;
-            resultsForTime[time] = _.get(dataForTime, ['anomalyScore', 'value']);
-          }
+          const dataByTime = _.get(dataForJob, ['byTime', 'buckets'], []);
+          _.each(dataByTime, (dataForTime) => {
+            const value = _.get(dataForTime, ['anomalyScore', 'value']);
+            if (value !== undefined) {
+              const time = dataForTime.key;
+              resultsForTime[time] = _.get(dataForTime, ['anomalyScore', 'value']);
+            }
+          });
+          obj.results[jobId] = resultsForTime;
         });
-        obj.results[jobId] = resultsForTime;
-      });
 
-      deferred.resolve(obj);
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
+    return deferred.promise;
+  };
+
+  // Obtains a list of scheduled events by job ID and time.
+  // Pass an empty array or ['*'] to search over all job IDs.
+  // Returned response contains a events property, which will only
+  // contains keys for jobs which have scheduled events for the specified time range.
+  this.getScheduledEventsByBucket = function (
+    jobIds,
+    earliestMs,
+    latestMs,
+    interval,
+    maxJobs,
+    maxEvents) {
+    const deferred = $q.defer();
+    const obj = {
+      success: true,
+      events: {}
+    };
+
+    // Build the criteria to use in the bool filter part of the request.
+    // Adds criteria for the time range plus any specified job IDs.
+    const boolCriteria = [
+      {
+        range: {
+          timestamp: {
+            gte: earliestMs,
+            lte: latestMs,
+            format: 'epoch_millis'
+          }
+        }
+      },
+      {
+        exists: { field: 'scheduled_events' }
+      }
+    ];
+
+    if (jobIds && jobIds.length > 0 && !(jobIds.length === 1 && jobIds[0] === '*')) {
+      let jobIdFilterStr = '';
+      _.each(jobIds, (jobId, i) => {
+        jobIdFilterStr += `${i > 0 ? ' OR ' : ''}job_id:${jobId}`;
+      });
+      boolCriteria.push({
+        query_string: {
+          analyze_wildcard: false,
+          query: jobIdFilterStr
+        }
+      });
+    }
+
+    es.search({
+      index: ML_RESULTS_INDEX_PATTERN,
+      size: 0,
+      body: {
+        query: {
+          bool: {
+            filter: [{
+              query_string: {
+                query: 'result_type:bucket',
+                analyze_wildcard: false
+              }
+            }, {
+              bool: {
+                must: boolCriteria
+              }
+            }]
+          }
+        },
+        aggs: {
+          jobs: {
+            terms: {
+              field: 'job_id',
+              min_doc_count: 1,
+              size: maxJobs
+            },
+            aggs: {
+              times: {
+                date_histogram: {
+                  field: 'timestamp',
+                  interval: interval,
+                  min_doc_count: 1
+                },
+                aggs: {
+                  events: {
+                    terms: {
+                      field: 'scheduled_events',
+                      size: maxEvents
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+      .then((resp) => {
+        const dataByJobId = _.get(resp, ['aggregations', 'jobs', 'buckets'], []);
+        _.each(dataByJobId, (dataForJob) => {
+          const jobId = dataForJob.key;
+          const resultsForTime = {};
+          const dataByTime = _.get(dataForJob, ['times', 'buckets'], []);
+          _.each(dataByTime, (dataForTime) => {
+            const time = dataForTime.key;
+            const events = _.get(dataForTime, ['events', 'buckets']);
+            resultsForTime[time] = _.map(events, 'key');
+          });
+          obj.events[jobId] = resultsForTime;
+        });
+
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -181,8 +296,8 @@ module.service('mlResultsService', function ($q, es) {
       });
       boolCriteria.push({
         'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
+          'analyze_wildcard': false,
+          'query': jobIdFilterStr
         }
       });
     }
@@ -249,30 +364,30 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      const fieldNameBuckets = _.get(resp, ['aggregations', 'influencerFieldNames', 'buckets'], []);
-      _.each(fieldNameBuckets, (nameBucket) => {
-        const fieldName = nameBucket.key;
-        const fieldValues = [];
+      .then((resp) => {
+        const fieldNameBuckets = _.get(resp, ['aggregations', 'influencerFieldNames', 'buckets'], []);
+        _.each(fieldNameBuckets, (nameBucket) => {
+          const fieldName = nameBucket.key;
+          const fieldValues = [];
 
-        const fieldValueBuckets = _.get(nameBucket, ['influencerFieldValues', 'buckets'], []);
-        _.each(fieldValueBuckets, (valueBucket) => {
-          const fieldValueResult = {
-            'influencerFieldValue': valueBucket.key,
-            'maxAnomalyScore': valueBucket.maxAnomalyScore.value,
-            'sumAnomalyScore': valueBucket.sumAnomalyScore.value
-          };
-          fieldValues.push(fieldValueResult);
+          const fieldValueBuckets = _.get(nameBucket, ['influencerFieldValues', 'buckets'], []);
+          _.each(fieldValueBuckets, (valueBucket) => {
+            const fieldValueResult = {
+              'influencerFieldValue': valueBucket.key,
+              'maxAnomalyScore': valueBucket.maxAnomalyScore.value,
+              'sumAnomalyScore': valueBucket.sumAnomalyScore.value
+            };
+            fieldValues.push(fieldValueResult);
+          });
+
+          obj.influencers[fieldName] = fieldValues;
         });
 
-        obj.influencers[fieldName] = fieldValues;
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
       });
-
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
     return deferred.promise;
   };
 
@@ -308,8 +423,8 @@ module.service('mlResultsService', function ($q, es) {
       });
       boolCriteria.push({
         'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
+          'analyze_wildcard': false,
+          'query': jobIdFilterStr
         }
       });
     }
@@ -361,113 +476,52 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      const buckets = _.get(resp, ['aggregations', 'influencerFieldValues', 'buckets'], []);
-      _.each(buckets, (bucket) => {
-        const result = {
-          'influencerFieldValue': bucket.key,
-          'maxAnomalyScore': bucket.maxAnomalyScore.value,
-          'sumAnomalyScore': bucket.sumAnomalyScore.value };
-        obj.results.push(result);
-      });
+      .then((resp) => {
+        const buckets = _.get(resp, ['aggregations', 'influencerFieldValues', 'buckets'], []);
+        _.each(buckets, (bucket) => {
+          const result = {
+            'influencerFieldValue': bucket.key,
+            'maxAnomalyScore': bucket.maxAnomalyScore.value,
+            'sumAnomalyScore': bucket.sumAnomalyScore.value };
+          obj.results.push(result);
+        });
 
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
-  // Obtains the maximum bucket influencer score by time for the specified job ID(s).
-  // Pass an empty array or ['*'] to search over all job IDs.
+  // Obtains the overall bucket scores for the specified job ID(s).
+  // Pass ['*'] to search over all job IDs.
   // Returned response contains a results property as an object of max score by time.
-  this.getBucketInfluencerMaxScoreByTime = function (jobIds, earliestMs, latestMs, interval) {
+  this.getOverallBucketScores = function (jobIds, topN, earliestMs, latestMs, interval) {
     const deferred = $q.defer();
     const obj = { success: true, results: {} };
 
-    // Build the criteria to use in the bool filter part of the request.
-    // Adds criteria for the time range plus any specified job IDs.
-    const boolCriteria = [];
-    boolCriteria.push({
-      'range': {
-        'timestamp': {
-          'gte': earliestMs,
-          'lte': latestMs,
-          'format': 'epoch_millis'
-        }
-      }
-    });
-    if (jobIds && jobIds.length > 0 && !(jobIds.length === 1 && jobIds[0] === '*')) {
-      let jobIdFilterStr = '';
-      _.each(jobIds, (jobId, i) => {
-        if (i > 0) {
-          jobIdFilterStr += ' OR ';
-        }
-        jobIdFilterStr += 'job_id:';
-        jobIdFilterStr += jobId;
-      });
-      boolCriteria.push({
-        'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
-        }
-      });
-    }
-
-    es.search({
-      index: ML_RESULTS_INDEX_PATTERN,
-      size: 0,
-      body: {
-        'query': {
-          'bool': {
-            'filter': [
-              {
-                'query_string': {
-                  'query': 'result_type:bucket_influencer',
-                  'analyze_wildcard': false
-                }
-              },
-              {
-                'bool': {
-                  'must': boolCriteria
-                }
-              }
-            ]
-          }
-        },
-        'aggs': {
-          'byTime': {
-            'date_histogram': {
-              'field': 'timestamp',
-              'interval': interval,
-              'min_doc_count': 1
-            },
-            'aggs': {
-              'maxAnomalyScore': {
-                'max': {
-                  'field': 'anomaly_score'
-                }
-              }
-            }
-          }
-        }
-      }
+    ml.overallBuckets({
+      jobId: jobIds,
+      topN: topN,
+      bucketSpan: interval,
+      start: earliestMs,
+      end: latestMs
     })
-    .then((resp) => {
-      const dataByTime = _.get(resp, ['aggregations', 'byTime', 'buckets'], []);
-      _.each(dataByTime, (dataForTime) => {
-        const value = _.get(dataForTime, ['maxAnomalyScore', 'value']);
-        if (value !== undefined) {
-          obj.results[dataForTime.key] = value;
-        }
-      });
+      .then(resp => {
+        const dataByTime = _.get(resp, ['overall_buckets'], []);
+        _.each(dataByTime, (dataForTime) => {
+          const value = _.get(dataForTime, ['overall_score']);
+          if (value !== undefined) {
+            obj.results[dataForTime.timestamp] = value;
+          }
+        });
 
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+        deferred.resolve(obj);
+      })
+      .catch(resp => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -483,29 +537,37 @@ module.service('mlResultsService', function ($q, es) {
 
     // Build the criteria to use in the bool filter part of the request.
     // Adds criteria for the time range plus any specified job IDs.
-    const boolCriteria = [];
-    boolCriteria.push({
-      'range': {
-        'timestamp': {
-          'gte': earliestMs,
-          'lte': latestMs,
-          'format': 'epoch_millis'
+    const boolCriteria = [
+      {
+        range: {
+          timestamp: {
+            gte: earliestMs,
+            lte: latestMs,
+            format: 'epoch_millis'
+          }
+        }
+      },
+      {
+        range: {
+          influencer_score: {
+            gt: 0
+          }
         }
       }
-    });
+    ];
+
     if (jobIds && jobIds.length > 0 && !(jobIds.length === 1 && jobIds[0] === '*')) {
       let jobIdFilterStr = '';
       _.each(jobIds, (jobId, i) => {
         if (i > 0) {
           jobIdFilterStr += ' OR ';
         }
-        jobIdFilterStr += 'job_id:';
-        jobIdFilterStr += jobId;
+        jobIdFilterStr += `job_id:${jobId}`;
       });
       boolCriteria.push({
-        'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
+        query_string: {
+          analyze_wildcard: false,
+          query: jobIdFilterStr
         }
       });
     }
@@ -516,13 +578,12 @@ module.service('mlResultsService', function ($q, es) {
         if (i > 0) {
           influencerFilterStr += ' OR ';
         }
-        influencerFilterStr += 'influencer_field_value:';
-        influencerFilterStr += escapeForElasticsearchQuery(value);
+        influencerFilterStr += `influencer_field_value:${escapeForElasticsearchQuery(value)}`;
       });
       boolCriteria.push({
-        'query_string': {
-          'analyze_wildcard':false,
-          'query':influencerFilterStr
+        query_string: {
+          analyze_wildcard: false,
+          query: influencerFilterStr
         }
       });
     }
@@ -531,49 +592,49 @@ module.service('mlResultsService', function ($q, es) {
       index: ML_RESULTS_INDEX_PATTERN,
       size: 0,
       body: {
-        'query': {
-          'bool': {
-            'filter': [
+        query: {
+          bool: {
+            filter: [
               {
-                'query_string': {
-                  'query': 'result_type:influencer AND influencer_field_name:' +
+                query_string: {
+                  query: 'result_type:influencer AND influencer_field_name:' +
                     escapeForElasticsearchQuery(influencerFieldName),
-                  'analyze_wildcard': false
+                  analyze_wildcard: false
                 }
               },
               {
-                'bool': {
-                  'must': boolCriteria
+                bool: {
+                  must: boolCriteria
                 }
               }
             ]
           }
         },
-        'aggs': {
-          'influencerFieldValues': {
-            'terms': {
-              'field': 'influencer_field_value',
-              'size': maxResults !== undefined ? maxResults : 10,
-              'order': {
-                'maxAnomalyScore': 'desc'
+        aggs: {
+          influencerFieldValues: {
+            terms: {
+              field: 'influencer_field_value',
+              size: maxResults !== undefined ? maxResults : 10,
+              order: {
+                maxAnomalyScore: 'desc'
               }
             },
-            'aggs': {
-              'maxAnomalyScore': {
-                'max': {
-                  'field': 'influencer_score'
+            aggs: {
+              maxAnomalyScore: {
+                max: {
+                  field: 'influencer_score'
                 }
               },
-              'byTime': {
-                'date_histogram': {
-                  'field': 'timestamp',
-                  'interval': interval,
-                  'min_doc_count': 1
+              byTime: {
+                date_histogram: {
+                  field: 'timestamp',
+                  interval,
+                  min_doc_count: 1
                 },
-                'aggs': {
-                  'maxAnomalyScore': {
-                    'max': {
-                      'field': 'influencer_score'
+                aggs: {
+                  maxAnomalyScore: {
+                    max: {
+                      field: 'influencer_score'
                     }
                   }
                 }
@@ -583,27 +644,27 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      const fieldValueBuckets = _.get(resp, ['aggregations', 'influencerFieldValues', 'buckets'], []);
-      _.each(fieldValueBuckets, (valueBucket) => {
-        const fieldValue = valueBucket.key;
-        const fieldValues = {};
+      .then((resp) => {
+        const fieldValueBuckets = _.get(resp, ['aggregations', 'influencerFieldValues', 'buckets'], []);
+        _.each(fieldValueBuckets, (valueBucket) => {
+          const fieldValue = valueBucket.key;
+          const fieldValues = {};
 
-        const timeBuckets = _.get(valueBucket, ['byTime', 'buckets'], []);
-        _.each(timeBuckets, (timeBucket) => {
-          const time = timeBucket.key;
-          const score = timeBucket.maxAnomalyScore.value;
-          fieldValues[time] = score;
+          const timeBuckets = _.get(valueBucket, ['byTime', 'buckets'], []);
+          _.each(timeBuckets, (timeBucket) => {
+            const time = timeBucket.key;
+            const score = timeBucket.maxAnomalyScore.value;
+            fieldValues[time] = score;
+          });
+
+          obj.results[fieldValue] = fieldValues;
         });
 
-        obj.results[fieldValue] = fieldValues;
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
       });
-
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
     return deferred.promise;
   };
 
@@ -629,19 +690,19 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0) {
-        const source = _.first(resp.hits.hits)._source;
-        obj.categoryId = source.category_id;
-        obj.regex = source.regex;
-        obj.terms = source.terms;
-        obj.examples = source.examples;
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+      .then((resp) => {
+        if (resp.hits.total !== 0) {
+          const source = _.first(resp.hits.hits)._source;
+          obj.categoryId = source.category_id;
+          obj.regex = source.regex;
+          obj.terms = source.terms;
+          obj.examples = source.examples;
+        }
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -652,7 +713,7 @@ module.service('mlResultsService', function ($q, es) {
   // examplesByCategoryId (list of examples against categoryId).
   this.getCategoryExamples = function (jobId, categoryIds, maxExamples) {
     const deferred = $q.defer();
-    const obj = { success: true, jobId: jobId, examplesByCategoryId:{} };
+    const obj = { success: true, jobId: jobId, examplesByCategoryId: {} };
 
     es.search({
       index: ML_RESULTS_INDEX_PATTERN,
@@ -668,23 +729,23 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0) {
-        _.each(resp.hits.hits, (hit) => {
-          if (maxExamples) {
-            obj.examplesByCategoryId[hit._source.category_id] =
+      .then((resp) => {
+        if (resp.hits.total !== 0) {
+          _.each(resp.hits.hits, (hit) => {
+            if (maxExamples) {
+              obj.examplesByCategoryId[hit._source.category_id] =
               _.slice(hit._source.examples, 0, Math.min(hit._source.examples.length, maxExamples));
-          } else {
-            obj.examplesByCategoryId[hit._source.category_id] = hit._source.examples;
-          }
+            } else {
+              obj.examplesByCategoryId[hit._source.category_id] = hit._source.examples;
+            }
 
-        });
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+          });
+        }
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -709,7 +770,7 @@ module.service('mlResultsService', function ($q, es) {
           'bool': {
             'must': [
               {
-                'exists' : { 'field' : 'influencers' }
+                'exists': { 'field': 'influencers' }
               }
             ]
           }
@@ -746,8 +807,8 @@ module.service('mlResultsService', function ($q, es) {
       });
       boolCriteria.push({
         'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
+          'analyze_wildcard': false,
+          'query': jobIdFilterStr
         }
       });
     }
@@ -774,22 +835,22 @@ module.service('mlResultsService', function ($q, es) {
             ]
           }
         },
-        'sort' : [
-          { 'record_score' : { 'order' : 'desc' } }
+        'sort': [
+          { 'record_score': { 'order': 'desc' } }
         ],
       }
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0) {
-        _.each(resp.hits.hits, (hit) => {
-          obj.records.push(hit._source);
-        });
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+      .then((resp) => {
+        if (resp.hits.total !== 0) {
+          _.each(resp.hits.hits, (hit) => {
+            obj.records.push(hit._source);
+          });
+        }
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -797,7 +858,8 @@ module.service('mlResultsService', function ($q, es) {
   // Queries Elasticsearch to obtain the record level results containing the specified influencer(s),
   // for the specified job(s), time range, and record score threshold.
   // influencers parameter must be an array, with each object in the array having 'fieldName'
-  // 'fieldValue' properties.
+  // 'fieldValue' properties. The influencer array uses 'should' for the nested bool query,
+  // so this returns record level results which have at least one of the influencers.
   // Pass an empty array or ['*'] to search over all job IDs.
   this.getRecordsForInfluencer = function (jobIds, influencers, threshold, earliestMs, latestMs, maxResults) {
     const deferred = $q.defer();
@@ -835,36 +897,43 @@ module.service('mlResultsService', function ($q, es) {
       });
       boolCriteria.push({
         'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
+          'analyze_wildcard': false,
+          'query': jobIdFilterStr
         }
       });
     }
 
     // Add a nested query to filter for each of the specified influencers.
-    _.each(influencers, (influencer) => {
+    if (influencers.length > 0) {
       boolCriteria.push({
-        'nested': {
-          'path': 'influencers',
-          'query': {
-            'bool': {
-              'must': [
-                {
-                  'match': {
-                    'influencers.influencer_field_name': influencer.fieldName
-                  }
-                },
-                {
-                  'match': {
-                    'influencers.influencer_field_values': influencer.fieldValue
+        bool: {
+          should: influencers.map((influencer) => {
+            return {
+              nested: {
+                path: 'influencers',
+                query: {
+                  bool: {
+                    must: [
+                      {
+                        match: {
+                          'influencers.influencer_field_name': influencer.fieldName
+                        }
+                      },
+                      {
+                        match: {
+                          'influencers.influencer_field_values': influencer.fieldValue
+                        }
+                      }
+                    ]
                   }
                 }
-              ]
-            }
-          }
+              }
+            };
+          }),
+          minimum_should_match: 1,
         }
       });
-    });
+    }
 
     es.search({
       index: ML_RESULTS_INDEX_PATTERN,
@@ -887,22 +956,22 @@ module.service('mlResultsService', function ($q, es) {
             ]
           }
         },
-        'sort' : [
-          { 'record_score' : { 'order' : 'desc' } }
+        'sort': [
+          { 'record_score': { 'order': 'desc' } }
         ],
       }
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0) {
-        _.each(resp.hits.hits, (hit) => {
-          obj.records.push(hit._source);
-        });
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+      .then((resp) => {
+        if (resp.hits.total !== 0) {
+          _.each(resp.hits.hits, (hit) => {
+            obj.records.push(hit._source);
+          });
+        }
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -971,7 +1040,7 @@ module.service('mlResultsService', function ($q, es) {
               'bool': {
                 'must': [
                   {
-                    'exists' : { 'field' : 'influencers' }
+                    'exists': { 'field': 'influencers' }
                   }
                 ]
               }
@@ -1002,22 +1071,22 @@ module.service('mlResultsService', function ($q, es) {
             ]
           }
         },
-        'sort' : [
-          { 'record_score' : { 'order' : 'desc' } }
+        'sort': [
+          { 'record_score': { 'order': 'desc' } }
         ],
       }
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0) {
-        _.each(resp.hits.hits, (hit) => {
-          obj.records.push(hit._source);
-        });
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+      .then((resp) => {
+        if (resp.hits.total !== 0) {
+          _.each(resp.hits.hits, (hit) => {
+            obj.records.push(hit._source);
+          });
+        }
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -1070,8 +1139,8 @@ module.service('mlResultsService', function ($q, es) {
       });
       boolCriteria.push({
         'query_string': {
-          'analyze_wildcard':false,
-          'query':jobIdFilterStr
+          'analyze_wildcard': false,
+          'query': jobIdFilterStr
         }
       });
     }
@@ -1104,22 +1173,22 @@ module.service('mlResultsService', function ($q, es) {
             ]
           }
         },
-        'sort' : [
-          { 'record_score' : { 'order' : 'desc' } }
+        'sort': [
+          { 'record_score': { 'order': 'desc' } }
         ],
       }
     })
-    .then((resp) => {
-      if (resp.hits.total !== 0) {
-        _.each(resp.hits.hits, (hit) => {
-          obj.records.push(hit._source);
-        });
-      }
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+      .then((resp) => {
+        if (resp.hits.total !== 0) {
+          _.each(resp.hits.hits, (hit) => {
+            obj.records.push(hit._source);
+          });
+        }
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
@@ -1144,14 +1213,14 @@ module.service('mlResultsService', function ($q, es) {
     const shouldCriteria = [];
 
     if (types && types.length) {
-      mustCriteria.push({ 'terms' : { '_type' : types } });
+      mustCriteria.push({ terms: { _type: types } });
     }
 
-    const timeRangeCriteria = { 'range':{} };
+    const timeRangeCriteria = { range: {} };
     timeRangeCriteria.range[timeFieldName] = {
-      'gte': earliestMs,
-      'lte': latestMs,
-      'format': 'epoch_millis'
+      gte: earliestMs,
+      lte: latestMs,
+      format: 'epoch_millis'
     };
     mustCriteria.push(timeRangeCriteria);
 
@@ -1165,20 +1234,22 @@ module.service('mlResultsService', function ($q, es) {
         // in quotes to do a phrase match. This is the best approach when the
         // field in the source data could be mapped as text or keyword.
         // a term query could only be used if we knew it was mapped as keyword.
+        // Backslash is a special character in JSON strings, so doubly escape
+        // any backslash characters which exist in the field value.
         mustCriteria.push({
-          'query_string': {
-            'query': escapeForElasticsearchQuery(entity.fieldName) + ':\"' + entity.fieldValue + '\"',
-            'analyze_wildcard': false
+          query_string: {
+            query: `${escapeForElasticsearchQuery(entity.fieldName)}:"${entity.fieldValue.replace(/\\/g, '\\\\')}"`,
+            analyze_wildcard: false
           }
         });
       } else {
         // Add special handling for blank entity field values, checking for either
         // an empty string or the field not existing.
         const emptyFieldCondition = {
-          'bool':{
-            'must':[
+          bool: {
+            must: [
               {
-                'term':{
+                term: {
                 }
               }
             ]
@@ -1187,10 +1258,10 @@ module.service('mlResultsService', function ($q, es) {
         emptyFieldCondition.bool.must[0].term[entity.fieldName] = '';
         shouldCriteria.push(emptyFieldCondition);
         shouldCriteria.push({
-          'bool':{
-            'must_not': [
+          bool: {
+            must_not: [
               {
-                'exists' : { 'field' : entity.fieldName }
+                exists: { field: entity.fieldName }
               }
             ]
           }
@@ -1200,21 +1271,21 @@ module.service('mlResultsService', function ($q, es) {
     });
 
     const body = {
-      'query': {
-        'bool': {
-          'must': mustCriteria
+      query: {
+        bool: {
+          must: mustCriteria
         }
       },
-      'size': 0,
-      '_source': {
-        'excludes': []
+      size: 0,
+      _source: {
+        excludes: []
       },
-      'aggs': {
-        'byTime': {
-          'date_histogram': {
-            'field': timeFieldName,
-            'interval': interval,
-            'min_doc_count': 0
+      aggs: {
+        byTime: {
+          date_histogram: {
+            field: timeFieldName,
+            interval: interval,
+            min_doc_count: 0
           }
 
         }
@@ -1230,7 +1301,10 @@ module.service('mlResultsService', function ($q, es) {
       body.aggs.byTime.aggs = {};
 
       const metricAgg = {};
-      metricAgg[metricFunction] = { 'field': metricFieldName };
+      metricAgg[metricFunction] = { field: metricFieldName };
+      if (metricFunction === 'percentiles') {
+        metricAgg[metricFunction].percents = [ML_MEDIAN_PERCENTS];
+      }
       body.aggs.byTime.aggs.metric = metricAgg;
     }
 
@@ -1238,32 +1312,118 @@ module.service('mlResultsService', function ($q, es) {
       index,
       body
     })
-    .then((resp) => {
-      const dataByTime = _.get(resp, ['aggregations', 'byTime', 'buckets'], []);
-      _.each(dataByTime, (dataForTime) => {
-        if (metricFunction === 'count') {
-          obj.results[dataForTime.key] = dataForTime.doc_count;
-        } else {
-          const value = _.get(dataForTime, ['metric', 'value']);
-          if (dataForTime.doc_count === 0) {
-            obj.results[dataForTime.key] = null;
-          } else if (value !== undefined) {
-            obj.results[dataForTime.key] = value;
+      .then((resp) => {
+        const dataByTime = _.get(resp, ['aggregations', 'byTime', 'buckets'], []);
+        _.each(dataByTime, (dataForTime) => {
+          if (metricFunction === 'count') {
+            obj.results[dataForTime.key] = dataForTime.doc_count;
           } else {
-            obj.results[dataForTime.key] = null;
+            const value = _.get(dataForTime, ['metric', 'value']);
+            const values = _.get(dataForTime, ['metric', 'values']);
+            if (dataForTime.doc_count === 0) {
+              obj.results[dataForTime.key] = null;
+            } else if (value !== undefined) {
+              obj.results[dataForTime.key] = value;
+            } else if (values !== undefined) {
+              obj.results[dataForTime.key] = values[ML_MEDIAN_PERCENTS];
+            } else {
+              obj.results[dataForTime.key] = null;
+            }
           }
-        }
-      });
+        });
 
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 
-  this.getModelPlotOutput = function (jobId, criteriaFields, earliestMs, latestMs, interval, aggType) {
+  // Queries Elasticsearch to obtain event rate data i.e. the count
+  // of documents over time.
+  // index can be a String, or String[], of index names to search.
+  // Extra query object can be supplied, or pass null if no additional query.
+  // Returned response contains a results property, which is an object
+  // of document counts against time (epoch millis).
+  this.getEventRateData = function (
+    index,
+    query,
+    timeFieldName,
+    earliestMs,
+    latestMs,
+    interval) {
+    const deferred = $q.defer();
+    const obj = { success: true, results: {} };
+
+    // Build the criteria to use in the bool filter part of the request.
+    // Add criteria for the types, time range, entity fields,
+    // plus any additional supplied query.
+    const mustCriteria = [{
+      range: {
+        [timeFieldName]: {
+          gte: earliestMs,
+          lte: latestMs,
+          format: 'epoch_millis'
+        }
+      }
+    }];
+
+    if (query) {
+      mustCriteria.push(query);
+    }
+
+    es.search({
+      index,
+      size: 0,
+      body: {
+        query: {
+          bool: {
+            must: mustCriteria
+          }
+        },
+        _source: {
+          excludes: []
+        },
+        aggs: {
+          eventRate: {
+            date_histogram: {
+              field: timeFieldName,
+              interval: interval,
+              min_doc_count: 0,
+              extended_bounds: {
+                min: earliestMs,
+                max: latestMs,
+              }
+            }
+          }
+        }
+      }
+    })
+      .then((resp) => {
+        const dataByTimeBucket = _.get(resp, ['aggregations', 'eventRate', 'buckets'], []);
+        _.each(dataByTimeBucket, (dataForTime) => {
+          const time = dataForTime.key;
+          obj.results[time] = dataForTime.doc_count;
+        });
+        obj.total = resp.hits.total;
+
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
+    return deferred.promise;
+  };
+
+  this.getModelPlotOutput = function (
+    jobId,
+    detectorIndex,
+    criteriaFields,
+    earliestMs,
+    latestMs,
+    interval,
+    aggType) {
     const deferred = $q.defer();
     const obj = {
       success: true,
@@ -1273,75 +1433,96 @@ module.service('mlResultsService', function ($q, es) {
     // if an aggType object has been passed in, use it.
     // otherwise default to min and max aggs for the upper and lower bounds
     const modelAggs = (aggType === undefined) ?
-    { max: 'max', min: 'min' } :
-    {
-      max: aggType.max,
-      min: aggType.min
-    };
+      { max: 'max', min: 'min' } :
+      {
+        max: aggType.max,
+        min: aggType.min
+      };
 
     // Build the criteria to use in the bool filter part of the request.
     // Add criteria for the job ID and time range.
-    const boolCriteria = [];
-    boolCriteria.push({
-      'term' : { 'job_id' : jobId }
-    });
-
-    boolCriteria.push({
-      'range': {
-        'timestamp': {
-          'gte': earliestMs,
-          'lte': latestMs,
-          'format': 'epoch_millis'
+    const mustCriteria = [
+      {
+        term: { job_id: jobId }
+      },
+      {
+        range: {
+          timestamp: {
+            gte: earliestMs,
+            lte: latestMs,
+            format: 'epoch_millis'
+          }
         }
       }
-    });
+    ];
 
     // Add in term queries for each of the specified criteria.
     _.each(criteriaFields, (criteria) => {
-      const condition = { 'term': {} };
-      condition.term[criteria.fieldName] = criteria.fieldValue;
-      boolCriteria.push(condition);
+      mustCriteria.push({
+        term: {
+          [criteria.fieldName]: criteria.fieldValue
+        }
+      });
     });
+
+    // Add criteria for the detector index. Results from jobs created before 6.1 will not
+    // contain a detector_index field, so use a should criteria with a 'not exists' check.
+    const shouldCriteria = [
+      {
+        term: { detector_index: detectorIndex }
+      },
+      {
+        bool: {
+          must_not: [
+            {
+              exists: { field: 'detector_index' }
+            }
+          ]
+        }
+      }
+    ];
 
     es.search({
       index: ML_RESULTS_INDEX_PATTERN,
       size: 0,
       body: {
-        'query': {
-          'bool': {
-            'filter': [{
-              'query_string': {
-                'query': 'result_type:model_plot',
-                'analyze_wildcard': true
+        query: {
+          bool: {
+            filter: [{
+              query_string: {
+                query: 'result_type:model_plot',
+                analyze_wildcard: true
               }
             }, {
-              'bool': {
-                'must': boolCriteria
+              bool: {
+                must: mustCriteria,
+                should: shouldCriteria,
+                minimum_should_match: 1
               }
             }]
           }
         },
-        'aggs': {
-          'times': {
-            'date_histogram': {
-              'field': 'timestamp',
-              'interval': interval,
-              'min_doc_count': 0
+        aggs: {
+          times: {
+            date_histogram: {
+              field: 'timestamp',
+              interval: interval,
+              min_doc_count: 0
             },
-            'aggs': {
-              'actual': {
-                'avg': {
-                  'field': 'actual'
+            aggs: {
+              actual: {
+                avg: {
+                  field: 'actual'
                 }
               },
-              'modelUpper': {
+              modelUpper: {
                 [modelAggs.max]: {
-                  'field': 'model_upper'
+                  field: 'model_upper'
                 }
               },
-              'modelLower': {
+              modelLower: {
                 [modelAggs.min]: {
-                  'field': 'model_lower'
+                  field: 'model_lower'
                 }
               }
             }
@@ -1349,33 +1530,33 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      const aggregationsByTime = _.get(resp, ['aggregations', 'times', 'buckets'], []);
-      _.each(aggregationsByTime, (dataForTime) => {
-        const time = dataForTime.key;
-        let modelUpper = _.get(dataForTime, ['modelUpper', 'value']);
-        let modelLower = _.get(dataForTime, ['modelLower', 'value']);
-        const actual = _.get(dataForTime, ['actual', 'value']);
+      .then((resp) => {
+        const aggregationsByTime = _.get(resp, ['aggregations', 'times', 'buckets'], []);
+        _.each(aggregationsByTime, (dataForTime) => {
+          const time = dataForTime.key;
+          let modelUpper = _.get(dataForTime, ['modelUpper', 'value']);
+          let modelLower = _.get(dataForTime, ['modelLower', 'value']);
+          const actual = _.get(dataForTime, ['actual', 'value']);
 
-        if (modelUpper === undefined || isFinite(modelUpper) === false) {
-          modelUpper = null;
-        }
-        if (modelLower === undefined || isFinite(modelLower) === false) {
-          modelLower = null;
-        }
+          if (modelUpper === undefined || isFinite(modelUpper) === false) {
+            modelUpper = null;
+          }
+          if (modelLower === undefined || isFinite(modelLower) === false) {
+            modelLower = null;
+          }
 
-        obj.results[time] = {
-          actual,
-          modelUpper,
-          modelLower
-        };
+          obj.results[time] = {
+            actual,
+            modelUpper,
+            modelLower
+          };
+        });
+
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
       });
-
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
 
     return deferred.promise;
   };
@@ -1392,19 +1573,19 @@ module.service('mlResultsService', function ($q, es) {
     };
 
     // Build the criteria to use in the bool filter part of the request.
-    const mustCriteria = [];
-    const shouldCriteria = [];
-    mustCriteria.push({
-      'range': {
-        'timestamp': {
-          'gte': earliestMs,
-          'lte': latestMs,
-          'format': 'epoch_millis'
+    const mustCriteria = [
+      {
+        range: {
+          timestamp: {
+            gte: earliestMs,
+            lte: latestMs,
+            format: 'epoch_millis'
+          }
         }
-      }
-    });
-
-    mustCriteria.push({ 'term': { 'job_id': jobId } });
+      },
+      { term: { job_id: jobId } }
+    ];
+    const shouldCriteria = [];
 
     _.each(criteriaFields, (criteria) => {
       if (criteria.fieldValue.length !== 0) {
@@ -1412,20 +1593,22 @@ module.service('mlResultsService', function ($q, es) {
         // in quotes to do a phrase match. This is the best approach when the
         // field in the source data could be mapped as text or keyword.
         // a term query could only be used if we knew it was mapped as keyword.
+        // Backslash is a special character in JSON strings, so doubly escape
+        // any backslash characters which exist in the field value.
         mustCriteria.push({
-          'query_string': {
-            'query': escapeForElasticsearchQuery(criteria.fieldName) + ':\"' + criteria.fieldValue + '\"',
-            'analyze_wildcard': false
+          query_string: {
+            query: `${escapeForElasticsearchQuery(criteria.fieldName)}:"${String(criteria.fieldValue).replace(/\\/g, '\\\\')}"`,
+            analyze_wildcard: false
           }
         });
       } else {
         // Add special handling for blank entity field values, checking for either
         // an empty string or the field not existing.
         const emptyFieldCondition = {
-          'bool':{
-            'must':[
+          bool: {
+            must: [
               {
-                'term':{
+                term: {
                 }
               }
             ]
@@ -1434,10 +1617,10 @@ module.service('mlResultsService', function ($q, es) {
         emptyFieldCondition.bool.must[0].term[criteria.fieldName] = '';
         shouldCriteria.push(emptyFieldCondition);
         shouldCriteria.push({
-          'bool':{
-            'must_not': [
+          bool: {
+            must_not: [
               {
-                'exists' : { 'field' : criteria.fieldName }
+                exists: { field: criteria.fieldName }
               }
             ]
           }
@@ -1450,31 +1633,31 @@ module.service('mlResultsService', function ($q, es) {
       index: ML_RESULTS_INDEX_PATTERN,
       size: 0,
       body: {
-        'query': {
-          'bool': {
-            'filter': [{
-              'query_string': {
-                'query': 'result_type:record',
-                'analyze_wildcard': true
+        query: {
+          bool: {
+            filter: [{
+              query_string: {
+                query: 'result_type:record',
+                analyze_wildcard: true
               }
             }, {
-              'bool': {
-                'must': mustCriteria
+              bool: {
+                must: mustCriteria
               }
             }]
           }
         },
-        'aggs': {
-          'times': {
-            'date_histogram': {
-              'field': 'timestamp',
-              'interval': interval,
-              'min_doc_count': 1
+        aggs: {
+          times: {
+            date_histogram: {
+              field: 'timestamp',
+              interval: interval,
+              min_doc_count: 1
             },
-            'aggs': {
-              'recordScore': {
-                'max': {
-                  'field': 'record_score'
+            aggs: {
+              recordScore: {
+                max: {
+                  field: 'record_score'
                 }
               }
             }
@@ -1482,20 +1665,20 @@ module.service('mlResultsService', function ($q, es) {
         }
       }
     })
-    .then((resp) => {
-      const aggregationsByTime = _.get(resp, ['aggregations', 'times', 'buckets'], []);
-      _.each(aggregationsByTime, (dataForTime) => {
-        const time = dataForTime.key;
-        obj.results[time] = {
-          'score': _.get(dataForTime, ['recordScore', 'value']),
-        };
-      });
+      .then((resp) => {
+        const aggregationsByTime = _.get(resp, ['aggregations', 'times', 'buckets'], []);
+        _.each(aggregationsByTime, (dataForTime) => {
+          const time = dataForTime.key;
+          obj.results[time] = {
+            score: _.get(dataForTime, ['recordScore', 'value']),
+          };
+        });
 
-      deferred.resolve(obj);
-    })
-    .catch((resp) => {
-      deferred.reject(resp);
-    });
+        deferred.resolve(obj);
+      })
+      .catch((resp) => {
+        deferred.reject(resp);
+      });
     return deferred.promise;
   };
 

@@ -1,16 +1,20 @@
 import { resolve } from 'path';
-import { has } from 'lodash';
+import { UI_SETTINGS_CUSTOM_PDF_LOGO } from './common/constants';
 import { mirrorPluginStatus } from '../../server/lib/mirror_plugin_status';
 import { main as mainRoutes } from './server/routes/main';
 import { jobs as jobRoutes } from './server/routes/jobs';
 
-import { phantom } from './server/lib/phantom';
 import { createQueueFactory } from './server/lib/create_queue';
 import { config as appConfig } from './server/config/config';
 import { checkLicenseFactory } from './server/lib/check_license';
 import { validateConfig } from './server/lib/validate_config';
-import { ExtractError } from './server/lib/extract';
-import { createExportTypesRegistryFactory } from './server/lib/create_export_types_registry';
+import { exportTypesRegistryFactory } from './server/lib/export_types_registry';
+
+export { getReportingUsage } from './server/usage';
+
+const kbToBase64Length = (kb) => {
+  return Math.floor((kb * 1024 * 8) / 6);
+};
 
 export const reporting = (kibana) => {
   return new kibana.Plugin({
@@ -26,11 +30,25 @@ export const reporting = (kibana) => {
         'plugins/reporting/controls/dashboard',
       ],
       hacks: [ 'plugins/reporting/hacks/job_completion_notifier'],
+      home: ['plugins/reporting/register_feature'],
       managementSections: ['plugins/reporting/views/management'],
       injectDefaultVars(server, options) {
         return {
           reportingPollConfig: options.poll
         };
+      },
+      uiSettingDefaults: {
+        [UI_SETTINGS_CUSTOM_PDF_LOGO]: {
+          description: `Custom image to use in the PDF's footer`,
+          value: null,
+          type: 'image',
+          options: {
+            maxSize: {
+              length: kbToBase64Length(200),
+              description: '200 kB',
+            }
+          }
+        }
       }
     },
 
@@ -50,15 +68,35 @@ export const reporting = (kibana) => {
           timeout: Joi.number().integer().default(30000),
         }).default(),
         capture: Joi.object({
+          record: Joi.boolean().default(false),
           zoom: Joi.number().integer().default(2),
           viewport: Joi.object({
             width: Joi.number().integer().default(1950),
             height: Joi.number().integer().default(1200)
           }).default(),
-          timeout: Joi.number().integer().default(20000),
+          timeout: Joi.number().integer().default(20000), //deprecated
           loadDelay: Joi.number().integer().default(3000),
-          settleTime: Joi.number().integer().default(1000),
-          concurrency: Joi.number().integer().default(appConfig.concurrency),
+          settleTime: Joi.number().integer().default(1000), //deprecated
+          concurrency: Joi.number().integer().default(appConfig.concurrency), //deprecated
+          browser: Joi.object({
+            type: Joi.any().valid('phantom', 'chromium').default('phantom'),
+            chromium: Joi.object({
+              disableSandbox: Joi.boolean().default(false),
+              proxy: Joi.object({
+                enabled: Joi.boolean().default(false),
+                server: Joi.string().uri({ scheme: ['http', 'https'] }).when('enabled', {
+                  is: Joi.valid(false),
+                  then: Joi.valid(null),
+                  else: Joi.required()
+                }),
+                bypass: Joi.array().items(Joi.string().regex(/^[^\s]+$/)).when('enabled', {
+                  is: Joi.valid(false),
+                  then: Joi.valid(null),
+                  else: Joi.default([])
+                })
+              }).default()
+            }).default()
+          }).default()
         }).default(),
         csv: Joi.object({
           maxSizeBytes: Joi.number().integer().default(1024 * 1024 * 10), // bytes in a kB * kB in a mB * 10
@@ -86,8 +124,7 @@ export const reporting = (kibana) => {
     },
 
     init: async function (server) {
-      const createExportTypesRegistry = createExportTypesRegistryFactory(server);
-      const exportTypesRegistry = await createExportTypesRegistry(resolve(__dirname, './export_types/*/server/index.js'));
+      const exportTypesRegistry = await exportTypesRegistryFactory(server);
       server.expose('exportTypesRegistry', exportTypesRegistry);
 
       const config = server.config();
@@ -102,51 +139,28 @@ export const reporting = (kibana) => {
         xpackMainPlugin.info.feature(this.id).registerLicenseCheckResultsGenerator(checkLicense);
       });
 
-      function setup() {
-        // prepare phantom binary
-        return phantom.install(config.get('path.data'))
-          .then((phantomPackage) => {
-            server.log(['reporting', 'debug'], `Phantom installed at ${phantomPackage.binary}`);
 
-            // intialize and register application components
-            server.expose('phantom', phantomPackage);
-            server.expose('queue', createQueueFactory(server));
-
-            // Reporting routes
-            mainRoutes(server);
-            jobRoutes(server);
-          })
-          .catch((err) => {
-            server.log(['reporting', 'error'], err);
-
-            if (!err instanceof ExtractError) {
-              this.status.red('Failed to install phantom.js. See kibana logs for more details.');
-              return;
-            }
-
-            server.log(['reporting', 'error'], err.cause);
-
-            if (['EACCES', 'EEXIST'].includes(err.cause.code)) {
-              this.status.red(
-                'Insufficient permissions for extracting the phantom.js archive. ' +
-                'Make sure the Kibana data directory (path.data) is owned by the same user that is running Kibana.'
-              );
-            } else {
-              this.status.red('Failed to extract the phantom.js archive. See kibana logs for more details.');
-            }
-          });
-      }
-
-      return setup();
-    },
-
-    deprecations: function () {
-      return [
-        (settings, log) => {
-          if (has(settings, 'capture.concurrency')) {
-            log('Config key "capture.concurrency" is no longer used and is now deprecated. It can be removed entirely.');
+      for(const exportType of exportTypesRegistry.getAll()) {
+        if (exportType.initFactory) {
+          const result = await exportType.initFactory(server)();
+          if (!result.success) {
+            this.status.red(result.message);
           }
         }
+      }
+
+      server.expose('queue', createQueueFactory(server));
+
+      // Reporting routes
+      mainRoutes(server);
+      jobRoutes(server);
+    },
+
+    deprecations: function ({ unused }) {
+      return [
+        unused("capture.concurrency"),
+        unused("capture.timeout"),
+        unused("capture.settleTime"),
       ];
     },
   });

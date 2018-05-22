@@ -84,11 +84,11 @@ uiRoutes
     resolve: {
       savedWorkspace: function (savedGraphWorkspaces, courier, $route) {
         return savedGraphWorkspaces.get($route.current.params.id)
-        .catch(
-          function () {
-            notify.error('Missing workspace');
-          }
-      );
+          .catch(
+            function () {
+              notify.error('Missing workspace');
+            }
+          );
 
       },
       //Copied from example found in wizard.js ( Kibana TODO - can't
@@ -121,12 +121,12 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
 
   function handleSuccess(data) {
     return checkLicense(Private, Promise, kbnBaseUrl)
-    .then(() => data);
+      .then(() => data);
   }
 
   function handleError(err) {
     return checkLicense(Private, Promise, kbnBaseUrl)
-    .then(() => notify.error(err));
+      .then(() => notify.error(err));
   }
 
   $scope.title = 'Graph';
@@ -301,65 +301,65 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
 
     const promise = $route.current.locals.GetIndexPatternProvider.get(selectedIndex.id);
     promise
-    .then(handleSuccess)
-    .then(function (indexPattern) {
-      const patternFields = indexPattern.getNonScriptedFields();
-      const blockedFieldNames = ['_id', '_index','_score','_source', '_type'];
-      patternFields.forEach(function (field, index) {
-        if (blockedFieldNames.indexOf(field.name) >= 0) {
-          return;
-        }
-        const graphFieldDef = {
-          'name': field.name
-        };
-        $scope.allFields.push(graphFieldDef);
-        graphFieldDef.hopSize = 5; //Default the number of results returned per hop
-        graphFieldDef.lastValidHopSize = graphFieldDef.hopSize;
-        graphFieldDef.icon = $scope.iconChoices[0];
-        for (let i = 0; i < $scope.iconChoices.length; i++) {
-          const icon = $scope.iconChoices[i];
-          for (let p = 0; p < icon.patterns.length; p++) {
-            const pattern = icon.patterns[p];
-            if (pattern.test(graphFieldDef.name)) {
-              graphFieldDef.icon = icon;
-              break;
+      .then(handleSuccess)
+      .then(function (indexPattern) {
+        const patternFields = indexPattern.getNonScriptedFields();
+        const blockedFieldNames = ['_id', '_index', '_score', '_source', '_type'];
+        patternFields.forEach(function (field, index) {
+          if (blockedFieldNames.indexOf(field.name) >= 0) {
+            return;
+          }
+          const graphFieldDef = {
+            'name': field.name
+          };
+          $scope.allFields.push(graphFieldDef);
+          graphFieldDef.hopSize = 5; //Default the number of results returned per hop
+          graphFieldDef.lastValidHopSize = graphFieldDef.hopSize;
+          graphFieldDef.icon = $scope.iconChoices[0];
+          for (let i = 0; i < $scope.iconChoices.length; i++) {
+            const icon = $scope.iconChoices[i];
+            for (let p = 0; p < icon.patterns.length; p++) {
+              const pattern = icon.patterns[p];
+              if (pattern.test(graphFieldDef.name)) {
+                graphFieldDef.icon = icon;
+                break;
+              }
             }
           }
-        }
-        graphFieldDef.color = $scope.colors[index % $scope.colors.length];
-      });
-      $scope.setAllFieldStatesToDefault();
+          graphFieldDef.color = $scope.colors[index % $scope.colors.length];
+        });
+        $scope.setAllFieldStatesToDefault();
 
-      $scope.allFields.sort(function (a, b) {
+        $scope.allFields.sort(function (a, b) {
         // TODO - should we use "popularity" setting from index pattern definition?
         // What is its intended use? Couldn't see it on the patternField objects
-        if (a.name < b.name) {
-          return -1;
-        } else if (a.name > b.name) {
-          return 1;
+          if (a.name < b.name) {
+            return -1;
+          } else if (a.name > b.name) {
+            return 1;
+          }
+          return 0;
+        });
+        $scope.filteredFields = $scope.allFields;
+        if ($scope.allFields.length > 0) {
+          $scope.selectedField = $scope.allFields[0];
         }
-        return 0;
-      });
-      $scope.filteredFields = $scope.allFields;
-      if ($scope.allFields.length > 0) {
-        $scope.selectedField = $scope.allFields[0];
-      }
 
 
-      if (postInitHandler) {
-        postInitHandler();
-      }
+        if (postInitHandler) {
+          postInitHandler();
+        }
 
-    }, handleError);
+      }, handleError);
 
   };
 
 
   $scope.clickEdge = function (edge) {
     if (edge.inferred) {
-      $scope.setDetail ({ 'inferredEdge':edge });
+      $scope.setDetail ({ 'inferredEdge': edge });
     }else {
-      $scope.workspace.getAllIntersections($scope.handleMergeCandidatesCallback, [edge.topSrc,edge.topTarget]);
+      $scope.workspace.getAllIntersections($scope.handleMergeCandidatesCallback, [edge.topSrc, edge.topTarget]);
     }
   };
 
@@ -483,7 +483,7 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
   };
 
   $scope.replaceKibanaUrlParam = function () {
-    $scope.newUrlTemplate.url = $scope.newUrlTemplate.url.replace(defaultKibanaQuery,',query:{{gquery}}');
+    $scope.newUrlTemplate.url = $scope.newUrlTemplate.url.replace(defaultKibanaQuery, ',query:{{gquery}}');
     $scope.lastPastedURL = null;
     $scope.checkForKibanaUrl();
   };
@@ -496,7 +496,7 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
   function detectKibanaUrlPaste(url) {
     $scope.lastPastedURL = url;
     $scope.checkForKibanaUrl();
-  };
+  }
 
   $scope.handleUrlTemplatePaste = function ($event) {
     window.setTimeout(function () {
@@ -508,14 +508,14 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
 
   $scope.resetNewUrlTemplate = function () {
     $scope.newUrlTemplate = {
-      url:null,
+      url: null,
       description: null,
-      encoder:$scope.outlinkEncoders[0]
+      encoder: $scope.outlinkEncoders[0]
     };
   };
 
   $scope.editUrlTemplate = function (urlTemplate) {
-    Object.assign($scope.newUrlTemplate, urlTemplate, { templateBeingEdited:urlTemplate });
+    Object.assign($scope.newUrlTemplate, urlTemplate, { templateBeingEdited: urlTemplate });
   };
 
   $scope.saveUrlTemplate = function () {
@@ -549,7 +549,7 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
   $scope.openUrlTemplate = function (template) {
     const url = template.url;
     const newUrl = url.replace(drillDownRegex, template.encoder.encode($scope.workspace));
-    window.open(newUrl,'_blank');
+    window.open(newUrl, '_blank');
   };
 
 
@@ -635,7 +635,7 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
       $scope.urlTemplates.push({
         url: discoverUrl,
         description: 'Raw documents',
-        encoder:$scope.outlinkEncoders[0]
+        encoder: $scope.outlinkEncoders[0]
       });
     }
   }
@@ -832,26 +832,26 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
             break;
           }
         }
-          //TODO what if field name no longer exists as part of the index-pattern definition?
+        //TODO what if field name no longer exists as part of the index-pattern definition?
       }
 
       $scope.updateLiveResponseFields();
       initWorkspaceIfRequired();
       const graph = {
-        nodes:[],
-        edges:[]
+        nodes: [],
+        edges: []
       };
       for (const i in wsObj.vertices) {
         var vertex = wsObj.vertices[i]; // eslint-disable-line no-var
         const node = {
-          field:vertex.field,
-          term:vertex.term,
-          label:vertex.label,
-          color : vertex.color,
-          icon : $scope.allFields.filter(function (fieldDef) {
+          field: vertex.field,
+          term: vertex.term,
+          label: vertex.label,
+          color: vertex.color,
+          icon: $scope.allFields.filter(function (fieldDef) {
             return vertex.field === fieldDef.name;
           })[0].icon,
-          data : {}
+          data: {}
         };
         graph.nodes.push(node);
       }
@@ -862,14 +862,14 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
         })[0];
         if (fieldDef) {
           const node = {
-            field:vertex.field,
-            term:vertex.term,
-            label:vertex.label,
-            color : vertex.color,
-            icon : fieldDef.icon,
-            data : {
-              field:vertex.field,
-              term:vertex.term
+            field: vertex.field,
+            term: vertex.term,
+            label: vertex.label,
+            color: vertex.color,
+            icon: fieldDef.icon,
+            data: {
+              field: vertex.field,
+              term: vertex.term
             }
           };
           $scope.workspace.blacklistedNodes.push(node);
@@ -883,8 +883,8 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
           inferred: link.inferred,
           label: link.label,
           term: vertex.term,
-          width : link.width,
-          weight : link.weight
+          width: link.width,
+          weight: link.weight
         });
       }
 
@@ -989,11 +989,11 @@ app.controller('graphuiPlugin', function ($scope, $route, $interval, $http, kbnU
       'indexPattern': $scope.selectedIndex.attributes.title,
       'selectedFields': $scope.selectedFields.map(function (field) {
         return {
-          'name':field.name,
-          'lastValidHopSize':field.lastValidHopSize,
-          'color':field.color,
-          'iconClass':field.icon.class,
-          'hopSize':field.hopSize
+          'name': field.name,
+          'lastValidHopSize': field.lastValidHopSize,
+          'color': field.color,
+          'iconClass': field.icon.class,
+          'hopSize': field.hopSize
         };
       }),
       blacklist,
