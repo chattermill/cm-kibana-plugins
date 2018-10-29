@@ -1,1 +1,0 @@
-export { licenseManagement } from './licenseManagement';

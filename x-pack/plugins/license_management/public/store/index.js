@@ -1,1 +1,0 @@
-export { licenseManagementStore } from './store';

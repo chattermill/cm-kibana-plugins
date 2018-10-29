@@ -429,11 +429,6 @@ export default function (server, actions, payload, task) {
           message = mustache.render(formatter, {payload: payload, watcher: task});
           priority = action.slack.priority || 'medium';
           log.debug(`webhook to #${action.slack.channel}, message: ${message}`);
-          let attachments = payload.attachments || [];
-          let attachment = attachments[0];
-          if (attachment) {
-            attachment.text = message;
-          }
 
           if (!action.slack.stateless) {
             // Log Event
@@ -451,17 +446,11 @@ export default function (server, actions, payload, task) {
           }
 
           try {
-            await slack.send({
-              text: (payload.title || 'Error'),
-              attachments: attachments,
+            const resp = await slack.chat.postMessage({
               channel: action.slack.channel,
-              username: config.settings.slack.username
+              text: message
             });
-            // const resp = await slack.chat.postMessage({
-            //   channel: action.slack.channel,
-            //   text: message
-            // });
-            // log.info(`Message sent to slack channel ${resp.channel} as ${resp.message.username}`);
+            log.info(`Message sent to slack channel ${resp.channel} as ${resp.message.username}`);
           } catch (err) {
             const msg = `Failed to send message to channel ${action.slack.channel} using token ${config.settings.slack.token}`;
             throw new ActionError(msg, err);

@@ -1,1 +1,0 @@
-export { updateLogstashSections } from './update_logstash_sections';
