@@ -1,6 +1,10 @@
 {
   "sentinl-watcher": {
     "properties": {
+      "wizard": {
+        "type": "object",
+        "enabled": false
+      },
       "input": {
         "type": "object",
         "enabled": false
@@ -27,25 +31,31 @@
       "disable": {
         "type": "boolean"
       },
+      "save_payload": {
+        "type": "boolean"
+      },
+      "impersonate": {
+        "type": "boolean"
+      },
+      "spy": {
+        "type": "boolean"
+      },
       "title": {
+        "type": "text"
+      },
+      "username": {
         "type": "text"
       },
       "sentinl": {
         "type": "object",
         "enabled": false
-      }
-    }
-  },
-  "sentinl-script": {
-    "properties": {
-      "title": {
+      },
+      "dashboard_link": {
         "type": "text"
       },
-      "description": {
-        "type": "text"
-      },
-      "body": {
-        "type": "text"
+      "custom": {
+        "type": "object",
+        "enabled": false
       }
     }
   },
@@ -55,6 +65,9 @@
         "type":  "text"
       },
       "sha": {
+        "type":  "text"
+      },
+      "password": {
         "type":  "text"
       }
     }

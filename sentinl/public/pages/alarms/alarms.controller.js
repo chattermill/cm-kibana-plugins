@@ -1,25 +1,66 @@
 import { get, isNumber } from 'lodash';
+import SentinlError from '../../lib/sentinl_error';
 import moment from 'moment';
 import uiChrome from 'ui/chrome';
 
 function AlarmsController($rootScope, $scope, $route, $interval,
-  $timeout, $injector, timefilter, Private, createNotifier, $window, $uibModal, navMenu,
-  globalNavState, Alarm, COMMON, $log, confirmModal) {
+  $timeout, $injector, Private, $window, $uibModal, navMenu,
+  globalNavState, alarmService, COMMON, confirmModal, sentinlLog,
+  getToastNotifications, getNotifier, getTimefilter) {
   'ngInject';
 
   $scope.title = COMMON.alarms.title;
   $scope.description = COMMON.description;
 
-  const notify = createNotifier({
-    location: COMMON.alarms.title,
-  });
+  //columns for dynamic view
+  $scope.alarmColumns = [
+    {
+      name:'level',
+      label:'Level',
+      visible: true
+    },
+    {
+      name: 'action',
+      label:'Action',
+      visible: true
+    },
+    {
+      name: 'watcher',
+      label: 'Watcher',
+      visible: true
+    },
+    {
+      name: 'message',
+      label: 'Message',
+      visible: true
+    }
+  ];
 
-  timefilter.enabled = true;
+  const location = COMMON.alarms.title;
+  const notify = getNotifier.create({ location });
+  const toastNotifications = getToastNotifications;
+  const timefilter = getTimefilter;
+
+  const log = sentinlLog;
+  log.initLocation(location);
+
+  $scope.alarmService = alarmService;
+
+  function errorMessage(err) {
+    log.error(err);
+    notify.error(err);
+  }
+
+  function getTime() {
+    // Kibana v6.3 .time, v6.4 .getTime()
+    return timefilter.time ? timefilter.time : timefilter.getTime();
+  }
+
   try {
     timefilter.enableAutoRefreshSelector();
     timefilter.enableTimeRangeSelector();
   } catch (err) {
-    $log.warn('Kibana v6.2.X feature:', err);
+    log.warn('Kibana v6.2.X+ feature:', err);
   }
 
   $scope.topNavMenu = navMenu.getTopNav('alarms');
@@ -28,66 +69,34 @@ function AlarmsController($rootScope, $scope, $route, $interval,
   /* First Boot */
 
   $scope.alarms = [];
-  $scope.timeInterval = timefilter.time;
 
   const getAlarms = function (interval) {
-    Alarm.updateFilter(interval)
+    $scope.alarmService.updateFilter(interval)
       .then((resp) => {
-        return Alarm.list().then((resp) => $scope.alarms = resp.data.hits.hits);
+        return $scope.alarmService.list().then((resp) => $scope.alarms = resp);
       })
-      .catch(notify.error);
+      .catch((err) => {
+        errorMessage(new SentinlError('Get alarms', err));
+      });
   };
 
-  getAlarms($scope.timeInterval);
-
-  $scope.$listen(timefilter, 'fetch', (res) => {
-    getAlarms($scope.timeInterval);
+  getAlarms(getTime());
+  $scope.$listen(timefilter, 'fetch', () => {
+    getAlarms(getTime());
   });
 
-  /* Listen for refreshInterval changes */
-
-  $rootScope.$watchCollection('timefilter.time', function (newvar, oldvar) {
-    if (newvar === oldvar) { return; }
-    let timeInterval = get($rootScope, 'timefilter.time');
-    if (timeInterval) {
-      $scope.timeInterval = timeInterval;
-      Alarm.updateFilter($scope.timeInterval)
-        .catch(notify.error);
-    }
-  });
-
-  $rootScope.$watchCollection('timefilter.refreshInterval', function () {
-    let refreshValue = get($rootScope, 'timefilter.refreshInterval.value');
-    let refreshPause = get($rootScope, 'timefilter.refreshInterval.pause');
-
-    // Kill any existing timer immediately
-    if ($scope.refreshalarms) {
-      $timeout.cancel($scope.refreshalarms);
-      $scope.refreshalarms = undefined;
-    }
-
-    // Check if Paused
-    if (refreshPause) {
-      if ($scope.refreshalarms) $timeout.cancel($scope.refreshalarms);
-      return;
-    }
-
-    // Process New Filter
-    if (refreshValue !== $scope.currentRefresh && refreshValue !== 0) {
-      // new refresh value
-      if (isNumber(refreshValue) && !refreshPause) {
-        $scope.newRefresh = refreshValue;
-        // Reset Interval & Schedule Next
-        $scope.refreshalarms = $timeout(function () {
-          $route.reload();
-        }, refreshValue);
-        $scope.$watch('$destroy', $scope.refreshalarms);
-      } else {
-        $scope.currentRefresh = 0;
-        $timeout.cancel($scope.refreshalarms);
+  let refresher;
+  $scope.$listen(timefilter, 'refreshIntervalUpdate', function () {
+    if (refresher) $timeout.cancel(refresher);
+    const interval = timefilter.getRefreshInterval();
+    if (interval.value > 0 && !interval.pause) {
+      function startRefresh() {
+        refresher = $timeout(function () {
+          if (!$scope.running) $scope.search();
+          startRefresh();
+        }, interval.value);
       }
-    } else {
-      $timeout.cancel($scope.refreshalarms);
+      startRefresh();
     }
   });
 
@@ -100,12 +109,12 @@ function AlarmsController($rootScope, $scope, $route, $interval,
   $scope.deleteAlarm = function (index, alarm) {
     async function doDelete() {
       try {
-        const resp = await Alarm.delete(alarm._index, alarm._type, alarm._id);
+        await $scope.alarmService.delete(alarm.id, alarm._index);
         $scope.alarms.splice(index - 1, 1);
-        notify.info(`Deleted alarm ${resp}`);
-        getAlarms($scope.timeInterval);
+        toastNotifications.addSuccess(`Deleted alarm '${alarm.id}'`);
+        getAlarms(getTime());
       } catch (err) {
-        notify.error(`fail to delete alarm, ${err}`);
+        errorMessage(new SentinlError('Delete alarm', err));
       }
     }
 
@@ -114,7 +123,7 @@ function AlarmsController($rootScope, $scope, $route, $interval,
       confirmButtonText: 'Delete alarm',
     };
 
-    confirmModal(`Are you sure you want to delete the alarm ${alarm._source.watcher}?`, confirmModalOptions);
+    confirmModal(`Are you sure you want to delete the alarm ${alarm.watcher}?`, confirmModalOptions);
   };
 
   var currentTime = moment($route.current.locals.currentTime);

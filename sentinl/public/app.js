@@ -16,29 +16,4 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-import './app.module';
-import './services/kibana/saved_watchers';
-import './services/kibana/saved_scripts';
-import './services/kibana/saved_users';
-
-/* routes */
-import './app.routes';
-
-/* styles */
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './style/main.less';
-import 'ui/autoload/styles';
-
-/* libs */
-import 'ui/kbn_top_nav';
-import 'ui/listen';
-import 'ui/timepicker';
-import 'ui/timefilter';
-import 'ui/directives/pretty_duration';
-
-import 'ui/saved_objects';
-import 'ui/courier';
-import 'ui/modals';
-import 'ui/react_components';
-/* dynamically inserted modules */
+/* ATTENTION! All UI modules are inserted dynamically. Do not add modules manually in this file! */

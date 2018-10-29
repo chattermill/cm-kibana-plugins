@@ -18,247 +18,89 @@
  */
 
 import fs from 'fs';
+import path from 'path';
 import { forEach, difference } from 'lodash';
+import appConfig from './app_config';
+
+function getListOfModulesToImport(folders = [], foldersToOmit = []) {
+  return folders
+    .map(folder => fs.readdirSync(folder)
+      .filter(folder => !foldersToOmit.includes(folder))
+      .map(module => `import './${path.basename(folder)}/${module}';`)
+    ).reduce((a, b) => [...a, ...b], []);
+}
+
+function getImportedLibs(appFile) {
+  return fs.readFileSync(appFile).toString().trim().split('\n');
+}
+
+function appendLibs(appFile, libsToImport) {
+  forEach(difference(libsToImport, getImportedLibs(appFile)), (lib) => {
+    fs.appendFileSync(appFile, `${lib}\n`);
+  });
+}
 
 export default function (kibana) {
-  let requirements = ['kibana', 'elasticsearch'];
+  const requirements = ['kibana', 'elasticsearch'];
+  const appFile = path.join(__dirname, 'public/app.js');
 
-  // Siren: check if saved objects api exists.
-  const savedObjectsAPI = `${kibana.rootDir}/src/siren_core_plugins/saved_objects_api`;
-  if (fs.existsSync(savedObjectsAPI)) {
-    requirements.push('saved_objects_api');
+  const publicFolders = [
+    './public/pages',
+    './public/filters',
+    './public/services',
+    './public/constants',
+    './public/directives',
+  ].map(f => path.join(__dirname, f));
 
-    // Siren: import saved objects api related libs.
-    let pathForLibs = `${kibana.rootDir}/siren_plugins/sentinl/public/app.js`;
-    pathForLibs = fs.existsSync(pathForLibs) ? pathForLibs : `${kibana.rootDir}/plugins/sentinl/public/app.js`;
+  const foldersToOmit = [
+    '__tests__',
+    'sentinl_api'
+  ];
 
-    const libsToImport = [
-      'import \'./services/siren/saved_watchers/index\';',
-      'import \'./services/siren/saved_users/index\';',
-      'import \'./services/siren/saved_scripts/index\';'
-    ];
+  const libsToImport = [
+    'import \'ui/kbn_top_nav\';',
+    'import \'ui/listen\';',
+    'import \'ui/courier\';',
+    'import \'ui/modals\';',
+    'import \'ui/react_components\';', // confirmModal needs this
+    'import \'angular-touch\';',
+    'import \'angular-ui-bootstrap\';',
+    'import \'ui/timepicker\';',
+    'import \'ui/timefilter\';',
+    'import \'chart.js\';',
+    'import \'angular-chart.js\';',
+    'import \'./style/main.less\';',
+    'import \'ui/autoload/styles\';',
+    'import \'font-awesome/css/font-awesome.css\';',
+    'import \'bootstrap/dist/js/bootstrap\';',
+    'import \'bootstrap/dist/css/bootstrap.css\';',
+    'import \'./app.module\';',
+    'import \'./app.routes\';',
+    ...getListOfModulesToImport(publicFolders, foldersToOmit)
+  ];
 
-    const data = fs.readFileSync(pathForLibs);
-    const libs = data.toString().trim().split('\n');
-
-    forEach(difference(libsToImport, libs), (lib) => {
-      fs.appendFileSync(pathForLibs, `${lib}\n`);
-    });
-  }
+  appendLibs(appFile, libsToImport);
 
   return new kibana.Plugin({
     require: requirements,
+    config: function (Joi) {
+      return appConfig(Joi);
+    },
     uiExports: {
-      spyModes: ['plugins/sentinl/dashboard_spy_button/alarm_button'],
       mappings: require('./server/mappings/sentinl.json'),
+      navbarExtensions: [],
+      uiSettingDefaults: {
+        'sentinl:experimental': {
+          value: false,
+          description: 'Enable Experimental features in SENTINL'
+        },
+      },
       app: {
         title: 'Sentinl',
         description: 'Kibana Alert App for Elasticsearch',
         main: 'plugins/sentinl/app',
         icon: 'plugins/sentinl/style/sentinl.svg',
-        injectVars: function (server, options) {
-          var config = server.config();
-          return {
-            kbnIndex: config.get('kibana.index'),
-            esShardTimeout: config.get('elasticsearch.shardTimeout'),
-            esApiVersion: config.get('elasticsearch.apiVersion'),
-            sentinlConfig: {
-              appName: config.get('sentinl.app_name'),
-              es: {
-                watcher: {
-                  schedule_timezone: config.get('sentinl.es.watcher.schedule_timezone')
-                }
-              }
-            }
-          };
-        }
       },
-    },
-    config: function (Joi) {
-      return Joi.object({
-        app_name: Joi.string().default('Sentinl'),
-        enabled: Joi.boolean().default(true),
-        sentinl: Joi.any().forbidden().error(new Error(
-          'Option "sentinl.sentinl.results" was deprecated. Use "sentinl.es.results" instead!'
-        )),
-        es: Joi.object({
-          allow_no_indices: Joi.boolean().default(false),
-          ignore_unavailable: Joi.boolean().default(false),
-          default_index: Joi.string().default('.kibana'),
-          default_type: Joi.string().default('doc'),
-          results: Joi.number().default(50),
-          host: Joi.string().default('localhost'),
-          protocol: Joi.string().default('http'),
-          port: Joi.number().default(9200),
-          timefield: Joi.string().default('@timestamp'),
-          type: Joi.any().forbidden().error(new Error(
-            'Option "sentinl.es.type" was deprecated. Use "sentinl.es.default_type" instead!'
-          )),
-          alarm_index: Joi.string().default('watcher_alarms'),
-          user_type: Joi.string().default('sentinl-user'),
-          watcher_type: Joi.string().default('sentinl-watcher'),
-          script_type: Joi.string().default('sentinl-script'),
-          alarm_type: Joi.string().default('sentinl-alarm'),
-          watcher: Joi.object({
-            schedule_timezone: Joi.string().default('utc'), // local, utc
-            trigger: Joi.number().default(3),
-            throttle: Joi.number().default(1),
-            recover: Joi.number().default(15000)
-          }).default(),
-        }).default(),
-        settings: Joi.object({
-          authentication: Joi.object({
-            https: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.https" was deprecated. Use "sentinl.es.protocol" instead!'
-            )),
-            verify_certificate: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.verify_certificate" was deprecated.' +
-              +'Use "sentinl.settings.authentication.cert.selfsigned" instead!'
-            )),
-            path_to_pem: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.path_to_pem" was deprecated. Use "sentinl.settings.authentication.cert.pem" instead!'
-            )),
-            admin_username: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.admin_username" was deprecated.' +
-              +'Use "sentinl.settings.authentication.username" instead!'
-            )),
-            admin_sha: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.admin_sha" was deprecated. Use "sentinl.settings.authentication.sha" instead!'
-            )),
-            mode: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.mode" was deprecated. Use "sentinl.settings.authentication.enabled" instead!'
-            )),
-            user_index: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.user_index" was deprecated. Users are saved in the default index!'
-            )),
-            user_type: Joi.any().forbidden().error(new Error(
-              'Option "sentinl.settings.authentication.user_type" was deprecated. Use "sentinl.es.user_type" instead!'
-            )),
-            enabled: Joi.boolean().default(false),
-            impersonate: Joi.boolean().default(false),
-            username: Joi.string().default('elastic'),
-            password: Joi.string().default('password'),
-            sha: Joi.string(),
-            cert: Joi.object({
-              selfsigned: Joi.boolean().default(true),
-              pem: Joi.string(),
-            }).default(),
-            encryption: Joi.object({
-              algorithm: Joi.string().default('AES-256-CBC'),
-              key: Joi.string().default('b9726b04608ac48ecb0b6918214ade54'),
-              iv_length: Joi.number().default(16)
-            }).default(),
-          }).default(),
-          cluster: Joi.object({
-            enabled: Joi.boolean().default(false),
-            debug: Joi.boolean().default(false),
-            name: Joi.string().default('sentinl'),
-            priority_for_master: Joi.number().default(0),
-            loop_delay: Joi.number().default(5),
-            absent_time: Joi.number().default(15),
-            absent_time_for_delete: Joi.number().default(86400),
-            cert: Joi.object({
-              selfsigned: Joi.boolean().default(true),
-              valid: Joi.number().default(10),
-              key: Joi.string().default(undefined),
-              cert: Joi.string().default(undefined),
-            }).default(),
-            gun: Joi.object({
-              port: Joi.number().default(9000),
-              host: Joi.string().default('localhost'),
-              cache: Joi.string().default('data.json'),
-              peers: Joi.array(),
-            }).default(),
-            host: Joi.object({
-              id: Joi.string().default('123'),
-              name: Joi.string().default('trex'),
-              node: Joi.string().default('hosts'),
-              priority: Joi.number().default(0),
-            }).default(),
-          }).default(),
-          email: Joi.object({
-            active: Joi.boolean().default(false),
-            host: Joi.string().default('localhost'),
-            user: Joi.string(),
-            password: Joi.string(),
-            port: Joi.number().default(25),
-            domain: Joi.string(),
-            ssl: Joi.boolean().default(false),
-            tls: Joi.boolean().default(false),
-            cert: Joi.object({
-              key: Joi.string(), // full system path
-              cert: Joi.string(), // full system path
-              ca: Joi.string(), // full system path
-            }),
-            authentication: Joi.array().default(['PLAIN', 'LOGIN', 'CRAM-MD5', 'XOAUTH2']),
-            timeout: Joi.number().default(5000),
-          }).default(),
-          slack: Joi.object({
-            active: Joi.boolean().default(false),
-            username: Joi.string(),
-            hook: Joi.string(),
-            channel: Joi.string(),
-          }).default(),
-          webhook: Joi.object({
-            active: Joi.boolean().default(false),
-            use_https: Joi.boolean().default(false),
-            method: Joi.string().default('POST'),
-            host: Joi.string(),
-            port: Joi.number(),
-            path: Joi.string().default(':/{{payload.watcher_id}'),
-            body: Joi.string().default('{{payload.watcher_id}}{payload.hits.total}}')
-          }).default(),
-          report: Joi.object({
-            debug: Joi.object({
-              headless: Joi.boolean().default(true),
-              devtools: Joi.boolean().default(false),
-            }).default(),
-            search_guard: Joi.any().forbidden().error(new Error(
-              'Option "report.search_guard" was deprecated. Use "report.authentication.mode.searchguard" instead!'
-            )),
-            simple_authentication: Joi.any().forbidden().error(new Error(
-              'Option "report.simple_authentication" was deprecated. Use "report.authentication.mode.basic" instead!'
-            )),
-            phantmjs_path: Joi.any().forbidden().error(new Error(
-              'Option "report.phantomjs_path" was deprecated. Sentinl does not use PhantomJS anymore. Headless Chrome is used instead: https://developers.google.com/web/tools/puppeteer/get-started'
-            )),
-            tmp_path: Joi.any().forbidden().error(new Error (
-              'Option "report.tmp_path" is not needed anymore. Just delete it from config!'
-            )),
-            active: Joi.boolean().default(false),
-            executable_path: Joi.string(),
-            authentication: Joi.object({
-              enabled: Joi.boolean().default(false),
-              mode: Joi.object({
-                searchguard: Joi.boolean().default(false),
-                xpack: Joi.boolean().default(false),
-                basic: Joi.boolean().default(false),
-                custom: Joi.boolean().default(false),
-              }).default(),
-              custom: Joi.object({
-                username_input_selector: Joi.string().default('#user'),
-                password_input_selector: Joi.string().default('#pass'),
-                login_btn_selector: Joi.string().default('.btn-lg'),
-              }).default(),
-            }).default(),
-            file: Joi.object({
-              pdf: Joi.object({
-                format: Joi.string().default('A4'),
-                landscape: Joi.boolean().default(true),
-              }).default(),
-              screenshot: Joi.object({
-                width: Joi.number().default(1920),
-                height: Joi.number().default(1080),
-              }).default(),
-            }).default(),
-            timeout: Joi.number().default(5000),
-          }).default(),
-          pushapps: Joi.object({
-            active: Joi.boolean().default(false),
-            api_key: Joi.string()
-          }).default()
-        }).default()
-      }).default();
     },
     init: require('./init.js')
   });

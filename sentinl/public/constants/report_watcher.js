@@ -1,7 +1,14 @@
-export default {
+/* global angular */
+
+import uuid from 'uuid/v4';
+
+const REPORTWATCHER = {
   title: 'reporter_title',
   disable: false,
   report: true,
+  save_payload: false,
+  impersonate: false,
+  spy: false,
   trigger: {
     schedule: {
       later: 'every 1 hour'
@@ -21,9 +28,16 @@ export default {
     }
   },
   actions: {
-    report_admin: {
+    ['report_admin_' + uuid()]: {
+      name: 'report admin',
       throttle_period: '15m',
       report: {
+        name: 'report screenshot',
+        auth: {
+          active: false,
+          mode: 'basic',
+        },
+        stateless: false,
         to: 'to@email.com',
         from: 'from@email.com',
         subject: 'My Report',
@@ -42,3 +56,5 @@ export default {
     }
   }
 };
+
+angular.module('apps/sentinl.reportwatcherConstants', []).constant('REPORTWATCHER', REPORTWATCHER);

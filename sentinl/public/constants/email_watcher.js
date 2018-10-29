@@ -1,10 +1,16 @@
-export default {
+/* global angular */
+import uuid from 'uuid/v4';
+
+const EMAILWATCHER = {
   title: 'watcher_title',
   disable: false,
   report: false,
+  save_payload: false,
+  impersonate: false,
+  spy: false,
   trigger: {
     schedule: {
-      later: 'every 5 minutes'
+      later: 'every 2 minutes'
     }
   },
   input: {
@@ -17,15 +23,15 @@ export default {
   },
   condition: {
     script: {
-      script: 'payload.hits.total > 100'
+      script: 'payload.hits.total >= 0'
     }
   },
   actions: {
-    email_admin: {
-      throttle_period: '15m',
+    ['email_alarm_' + uuid()]: {
+      name: 'email alarm',
+      throttle_period: '1m',
       email: {
-        to: 'alarm@localhost',
-        from: 'sentinl@localhost',
+        stateless: false,
         subject: 'Alarm',
         priority: 'high',
         body: 'Found {{payload.hits.total}} Events'
@@ -33,3 +39,5 @@ export default {
     }
   }
 };
+
+angular.module('apps/sentinl.emailwatcherConstants', []).constant('EMAILWATCHER', EMAILWATCHER);

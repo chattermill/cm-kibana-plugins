@@ -1,6 +1,5 @@
-import Promise from 'bluebird';
-import path from 'path';
-import klawSync from 'klaw-sync';
+const fs = require('fs');
+const path = require('path');
 
 /**
 * Check if Kibi
@@ -12,22 +11,57 @@ const isKibi = function (server) {
   return server.plugins.saved_objects_api ? true : false;
 };
 
-/**
-* Get full sys path by file name
-*
-* @param {string} fileName
-* @param {string} rootPath where to look for the fileName
-* @return {string} full sys path to fileName
-*/
-const getFullPathByFileName = function (fileName, rootPath) {
-  const paths = klawSync(rootPath);
-  let found = paths.filter((e) => path.basename(e.path) === fileName);
-  if (Array.isArray(found) && !!found.length) {
-    return found[0].path;
+const listAllFilesSync = function (dir, filesArr) {
+  filesArr = filesArr || [];
+  fs.readdirSync(dir).map(name => path.join(dir, name)).forEach(function (file) {
+    if (fs.lstatSync(file).isDirectory()) {
+      filesArr = listAllFilesSync(file, filesArr);
+    } else {
+      filesArr.push(file);
+    }
+  });
+  return filesArr;
+};
+
+const pickDefinedValues = function (obj) {
+  return JSON.parse(JSON.stringify(obj));
+};
+
+const makeExecutableIfNecessary = function (filename) {
+  try {
+    fs.accessSync(filename, fs.constants.X_OK);
+  } catch (err) {
+    fs.chmodSync(filename, '755');
   }
 };
 
+const flatAttributes = function (doc) {
+  if (!doc.attributes) {
+    return doc;
+  }
+
+  if (doc._index) {
+    doc.attributes._index = doc._index;
+  }
+
+  doc.attributes.id = doc.id;
+  return doc.attributes;
+};
+
+const getCurrentTime = function () {
+  return new Date().toISOString();
+};
+
+const trimIdTypePrefix = function (id) {
+  return id.includes(':') ? id.split(':')[1] : id;
+};
+
 module.exports = {
+  trimIdTypePrefix,
+  getCurrentTime,
+  flatAttributes,
   isKibi,
-  getFullPathByFileName,
+  listAllFilesSync,
+  pickDefinedValues,
+  makeExecutableIfNecessary,
 };

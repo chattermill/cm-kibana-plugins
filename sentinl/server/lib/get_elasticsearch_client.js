@@ -8,11 +8,17 @@ import fs from 'fs';
 import Crypto from './crypto';
 import Log from './log';
 
+let log;
+
 /**
 * Get client
 *
 */
-function esClient(config, username, password) {
+function esClient(server, isSiren, clusterType, config, username, password) {
+  if (isSiren) {
+    return server.plugins.elasticsearch.getCluster(clusterType).createClient({ username, password });
+  }
+
   const options = {
     host: [
       {
@@ -22,6 +28,7 @@ function esClient(config, username, password) {
       }
     ]
   };
+  log.debug('es client options (password hidden): ' + JSON.stringify(options.host, null, 2));
 
   if (username && password) {
     options.host[0].auth = username + ':' + password;
@@ -42,26 +49,41 @@ function esClient(config, username, password) {
 * Get Elasticsearch client
 *
 */
-export default function getElasticsearchClient(server, config, type = 'data', impersonate = null) {
-  const log = new Log(config.app_name, server, 'get_elasticsearch_client');
+export default function getElasticsearchClient({
+  server,
+  config,
+  type = 'data',
+  impersonateUsername = null,
+  impersonateSha = null,
+  impersonatePassword = null,
+  impersonateId = null,
+  isSiren = false,
+}) {
+  log = new Log(config.app_name, server, 'get_elasticsearch_client');
 
   const auth = config.settings.authentication;
   // Basic authentication
   if (auth.enabled) {
     const crypto = new Crypto(auth.encryption);
 
-    if (impersonate) {
-      log.debug(`impersonating Elasticsearch client by ${auth.username}:${auth.sha}`);
-      return esClient(config, impersonate.username, crypto.decrypt(impersonate.sha));
+    if (impersonateUsername && (impersonateSha || impersonatePassword)) {
+      log.debug(`impersonate watcher "${impersonateId}" by its user: "${impersonateUsername}"`);
+      if (!impersonateSha) {
+        log.debug(`impersonate watcher "${impersonateId}", no SHA found, use clear text password`);
+        return esClient(server, isSiren, type, config, impersonateUsername, impersonatePassword);
+      }
+      return esClient(server, isSiren, type, config, impersonateUsername, crypto.decrypt(impersonateSha));
     }
 
     if (auth.sha) {
-      log.debug(`impersonating Elasticsearch client by ${auth.username}:${auth.sha}`);
-      return esClient(config, auth.username, crypto.decrypt(auth.sha));
+      log.debug(`impersonate Sentinl by common user from config: "${auth.username}" and its SHA`);
+      return esClient(server, isSiren, type, config, auth.username, crypto.decrypt(auth.sha));
     }
 
-    log.debug(`impersonating Elasticsearch client by ${auth.username}:${auth.password}`);
-    return esClient(config, auth.username, auth.password);
+    if (!server.plugins.investigate_access_control && !server.plugins.kibi_access_control) {
+      log.debug(`impersonate Sentinl by common user from config: "${auth.username}"`);
+      return esClient(server, isSiren, type, config, auth.username, auth.password);
+    }
   }
 
   // Authentication via Kibi Access Control app
@@ -83,10 +105,6 @@ export default function getElasticsearchClient(server, config, type = 'data', im
     });
   }
 
-  log.debug('auth via Kibana server elasticseaarch plugin');
-  if (type === 'data') {
-    return server.plugins.elasticsearch.getCluster('data').getClient();
-  }
-
-  return server.plugins.elasticsearch.getCluster('admin').getClient();
+  log.debug('auth via Kibana server elasticsearch plugin');
+  return server.plugins.elasticsearch.getCluster(type).getClient();
 }
